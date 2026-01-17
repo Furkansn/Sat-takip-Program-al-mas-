@@ -162,8 +162,16 @@ export default function NewSalePage() {
                         const isInsufficient = product && remaining < 0;
 
                         return (
-                            <div key={index} className="sale-item-row" style={{ alignItems: 'flex-start' }}>
-                                <div className="sale-item-product">
+                            <div key={index} style={{
+                                display: 'grid',
+                                // Using grid to layout: Product(Flexible), Qty(70px), Price(90px), Total(90px), Delete(30px)
+                                gridTemplateColumns: 'minmax(0, 1fr) 70px 90px minmax(70px, 90px) 30px',
+                                gap: '10px',
+                                alignItems: 'start',
+                                paddingBottom: '1rem',
+                                borderBottom: '1px solid var(--border)'
+                            }}>
+                                <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Ürün</label>
                                     <select
                                         className="select"
@@ -193,8 +201,8 @@ export default function NewSalePage() {
                                     )}
                                 </div>
 
-                                <div className="sale-item-qty" style={{ position: 'relative' }}>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Adet</label>
+                                <div style={{ position: 'relative' }}>
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'center' }}>Adet</label>
                                     <input
                                         type="number"
                                         className="input"
@@ -210,7 +218,6 @@ export default function NewSalePage() {
                                             color: isInsufficient ? '#ef4444' : undefined
                                         }}
                                     />
-                                    {/* Stock Remaining Warning */}
                                     {product && (
                                         <div style={{
                                             position: 'absolute',
@@ -224,7 +231,6 @@ export default function NewSalePage() {
                                             whiteSpace: 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
-                                            zIndex: 10,
                                             textAlign: 'center'
                                         }}>
                                             {isInsufficient ? 'Yetersiz!' : `Kalan: ${remaining}`}
@@ -232,8 +238,8 @@ export default function NewSalePage() {
                                     )}
                                 </div>
 
-                                <div className="sale-item-price">
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Birim ($)</label>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'right' }}>Birim ($)</label>
                                     <input
                                         type="number"
                                         className="input"
@@ -248,12 +254,12 @@ export default function NewSalePage() {
                                     )}
                                 </div>
 
-                                <div className="sale-item-total">
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginBottom: '0.2rem' }}>Toplam</div>
+                                <div style={{ textAlign: 'right', marginTop: '1.4rem' }}>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginBottom: '0.2rem', display: 'none' }}>Toplam</div>
                                     <div style={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>${(item.quantity * item.unitPrice).toLocaleString()}</div>
                                 </div>
 
-                                <div className="sale-item-action">
+                                <div>
                                     <button
                                         type="button"
                                         onClick={() => removeItem(index)}
