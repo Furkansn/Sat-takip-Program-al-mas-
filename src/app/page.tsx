@@ -9,7 +9,7 @@ export default async function DashboardPage({
 }: {
     searchParams?: { filter?: 'all' | 'month' | 'today' };
 }) {
-    const filter = searchParams?.filter || 'all';
+    const filter = searchParams?.filter || 'today';
 
     // Fetch data based on filter
     const stats = await getDashboardStats(filter);
@@ -63,8 +63,7 @@ export default async function DashboardPage({
                         <table className="table">
                             <thead>
                                 <tr>
-                                    <th>Tarih</th>
-                                    <th>Müşteri</th>
+                                    <th style={{ textAlign: 'left' }}>Müşteri / Tarih</th>
                                     <th style={{ textAlign: 'right' }}>Tutar</th>
                                 </tr>
                             </thead>

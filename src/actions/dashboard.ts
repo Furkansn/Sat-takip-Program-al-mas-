@@ -72,7 +72,7 @@ export async function getTopProducts(filter: FilterType = 'all') {
         _sum: { quantity: true, lineTotal: true },
         where: whereClause,
         orderBy: {
-            _sum: { lineTotal: 'desc' }
+            _sum: { quantity: 'desc' }
         },
         take: 5
     });

@@ -24,7 +24,7 @@ export default function NewCustomerPage() {
                 </div>
                 <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem' }}>Telefon</label>
-                    <input name="phone" className="input" placeholder="555..." />
+                    <input name="phone" required className="input" placeholder="555..." />
                 </div>
                 <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem' }}>Adres</label>

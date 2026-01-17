@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createProduct, updateStock, updateProduct, deleteProduct } from "@/actions/transaction";
 import { useRouter } from "next/navigation";
 
@@ -10,13 +10,29 @@ export default function ProductsClient({ products }: { products: any[] }) {
     const [showStockModal, setShowStockModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<any>(null);
 
+    // Image & Price Calculation States
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
+    const [cost, setCost] = useState<number>(0);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Reset states when modal closes/opens
+    const resetForm = () => {
+        setImagePreview(null);
+        setCalculatedPrice(0);
+        setCost(0);
+        setEditingProduct(null);
+    };
+
     async function handleSaveProduct(formData: FormData) {
-        const name = formData.get("name") as string;
-        const price = Number(formData.get("price"));
-        const stock = Number(formData.get("stock"));
+        // Append image data if available
+        if (imagePreview) {
+            formData.set("imageUrl", imagePreview);
+        }
 
         if (editingProduct) {
-            await updateProduct(editingProduct.id, { name, price, stock });
+            await updateProduct(editingProduct.id, formData);
         } else {
             await createProduct(formData);
         }
@@ -25,15 +41,15 @@ export default function ProductsClient({ products }: { products: any[] }) {
     }
 
     async function handleDeleteProduct(id: string) {
-        // if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
-        try {
-            await deleteProduct(id);
-            closeProductModal();
-            router.refresh();
-        } catch (e: any) {
-            alert(e.message);
+        if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
+            try {
+                await deleteProduct(id);
+                closeProductModal();
+                router.refresh();
+            } catch (e: any) {
+                alert(e.message);
+            }
         }
-        // }
     }
 
     async function handleAddStock(formData: FormData) {
@@ -47,13 +63,60 @@ export default function ProductsClient({ products }: { products: any[] }) {
 
     function openEditModal(product: any) {
         setEditingProduct(product);
+        setImagePreview(product.imageUrl || null);
+        setCost(product.cost || 0);
+        setCalculatedPrice(product.price || 0);
         setShowProductModal(true);
     }
 
     function closeProductModal() {
-        setEditingProduct(null);
+        resetForm();
         setShowProductModal(false);
     }
+
+    // Image Processing
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event: any) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                // Resize logic: Max 800px width
+                let width = img.width;
+                let height = img.height;
+                const MAX_WIDTH = 800;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/webp', 0.8);
+                    setImagePreview(dataUrl);
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Price Calculation
+    const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = Number(e.target.value);
+        setCost(val);
+        // %30 profit margin logic: Price = Cost * 1.30
+        const suggestedPrice = Number((val * 1.30).toFixed(2));
+        setCalculatedPrice(suggestedPrice);
+    };
 
     return (
         <>
@@ -67,7 +130,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     </button>
                     <button
                         className="btn btn-primary"
-                        onClick={() => { setEditingProduct(null); setShowProductModal(true); }}
+                        onClick={() => { resetForm(); setShowProductModal(true); }}
                     >
                         + Ürün Ekle
                     </button>
@@ -78,7 +141,9 @@ export default function ProductsClient({ products }: { products: any[] }) {
                 <table className="table table-separated">
                     <thead>
                         <tr>
+                            <th style={{ width: '60px' }}>Görsel</th>
                             <th>Ürün Adı</th>
+                            <th>Grup</th>
                             <th>Fiyat</th>
                             <th style={{ textAlign: 'center' }}>Stok</th>
                             <th style={{ textAlign: 'right' }}>İşlemler</th>
@@ -87,16 +152,31 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     <tbody>
                         {products.length === 0 ? (
                             <tr>
-                                <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-neutral)' }}>Ürün bulunamadı.</td>
+                                <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-neutral)' }}>Ürün bulunamadı.</td>
                             </tr>
                         ) : products.map(p => (
                             <tr key={p.id}>
-                                <td data-label="Ürün Adı">{p.name}</td>
-                                <td data-label="Fiyat">${p.price.toLocaleString('en-US')}</td>
-                                <td data-label="Stok" style={{ textAlign: 'center' }}>
-                                    <span className={p.stock < 10 ? "badge badge-warning" : ""}>{p.stock}</span>
+                                <td>
+                                    {p.imageUrl ? (
+                                        <img src={p.imageUrl} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                                    ) : (
+                                        <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '4px' }}></div>
+                                    )}
                                 </td>
-                                <td data-label="İşlemler" style={{ textAlign: 'right' }}>
+                                <td>
+                                    <div style={{ fontWeight: 600 }}>{p.name}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-neutral)' }}>
+                                        {p.compatibleBrand} {p.compatibleModels}
+                                    </div>
+                                </td>
+                                <td>{p.productGroup || '-'}</td>
+                                <td>${p.price.toLocaleString('en-US')}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                    <span className={p.stock < 5 ? "badge badge-danger" : (p.stock < 10 ? "badge badge-warning" : "badge")}>
+                                        {p.stock}
+                                    </span>
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
                                     <button
                                         onClick={() => openEditModal(p)}
                                         className="btn btn-secondary"
@@ -117,9 +197,9 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={handleSaveProduct} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3>{editingProduct ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}</h3>
+                    <form action={handleSaveProduct} className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', margin: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+                            <h3 style={{ margin: 0 }}>{editingProduct ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}</h3>
                             {editingProduct && (
                                 <button
                                     type="button"
@@ -131,28 +211,161 @@ export default function ProductsClient({ products }: { products: any[] }) {
                             )}
                         </div>
 
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label>Ürün Adı</label>
-                            <input name="name" defaultValue={editingProduct?.name} required className="input" autoFocus />
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+
+                            {/* Left Column - Basic Info */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div>
+                                    <label>Ürün Adı *</label>
+                                    <input name="name" defaultValue={editingProduct?.name} required className="input" />
+                                </div>
+
+                                <div>
+                                    <label>Ürün Grubu *</label>
+                                    <select name="productGroup" defaultValue={editingProduct?.productGroup || ""} required className="input" style={{ height: '42px' }}>
+                                        <option value="">Seçiniz...</option>
+                                        <option value="Ekran">Ekran</option>
+                                        <option value="LGP">LGP</option>
+                                        <option value="Ekran Koruma">Ekran Koruma</option>
+                                        <option value="Kumanda">Kumanda</option>
+                                        <option value="Led">Led</option>
+                                    </select>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div>
+                                        <label>Led St Kodu</label>
+                                        <input name="ledStCode" defaultValue={editingProduct?.ledStCode} className="input" />
+                                    </div>
+                                    <div>
+                                        <label>Led Kodu</label>
+                                        <input name="ledCode" defaultValue={editingProduct?.ledCode} className="input" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label>Uyumlu Marka</label>
+                                    <input name="compatibleBrand" defaultValue={editingProduct?.compatibleBrand} className="input" placeholder="Örn: Samsung" />
+                                </div>
+                            </div>
+
+                            {/* Middle Column - Compatibility & Details */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div>
+                                    <label>Uyumlu Modeller</label>
+                                    <textarea name="compatibleModels" defaultValue={editingProduct?.compatibleModels} className="input" rows={3} placeholder="Model kodlarını yazınız..." />
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div>
+                                        <label>İnç</label>
+                                        <input name="inch" type="number" defaultValue={editingProduct?.inch} className="input" />
+                                    </div>
+                                    <div>
+                                        <label>Depo Konumu</label>
+                                        <input name="location" defaultValue={editingProduct?.location} className="input" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label>Tedarikçi</label>
+                                    <input
+                                        name="supplierName"
+                                        list="suppliers"
+                                        defaultValue={editingProduct?.supplier?.name}
+                                        className="input"
+                                        placeholder="Seçiniz veya yazınız"
+                                    />
+                                    {/* Datalist will be populated if we pass suppliers prop, but for now it works as free text input that saves relations on backend */}
+                                    <datalist id="suppliers">
+                                        {/* Ideally passed from props */}
+                                    </datalist>
+                                </div>
+                            </div>
+
+                            {/* Right Column - Financials & Image */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
+                                    <label>Maliyet ($)</label>
+                                    <input
+                                        name="cost"
+                                        type="number"
+                                        step="0.01"
+                                        value={cost}
+                                        onChange={handleCostChange}
+                                        className="input"
+                                    />
+
+                                    <label style={{ marginTop: '1rem', display: 'block' }}>Satış Fiyatı ($) <small>(%30 marj)</small></label>
+                                    <input
+                                        name="price"
+                                        type="number"
+                                        step="0.01"
+                                        value={calculatedPrice}
+                                        onChange={(e) => setCalculatedPrice(Number(e.target.value))}
+                                        required
+                                        className="input"
+                                        style={{ fontWeight: 'bold', fontSize: '1.1rem' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label>Stok Adedi</label>
+                                    <input
+                                        name="stock"
+                                        type="number"
+                                        defaultValue={editingProduct?.stock || 0}
+                                        required
+                                        className="input"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label>Ürün Görseli</label>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        style={{ display: 'none' }}
+                                    />
+                                    <div
+                                        onClick={() => fileInputRef.current?.click()}
+                                        style={{
+                                            height: '100px',
+                                            border: '2px dashed var(--border)',
+                                            borderRadius: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            marginTop: '0.5rem',
+                                            overflow: 'hidden',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        {imagePreview ? (
+                                            <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                        ) : (
+                                            <span style={{ color: 'var(--color-neutral)' }}>Fotoğraf Seç</span>
+                                        )}
+                                    </div>
+                                    {/* Hidden input to ensure value is submitted if no new file is selected but preview exists (edit mode) is handled by state logic in submit, but for native formData we need to ensure the logic works. 
+                                        Actually in handleSaveProduct we check imagePreview state.
+                                    */}
+                                </div>
+                            </div>
                         </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label>Birim Fiyat ($)</label>
-                            <input name="price" type="number" step="0.01" min="0" defaultValue={editingProduct?.price} required className="input" />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label>{editingProduct ? 'Stok (Manuel Düzeltme)' : 'Başlangıç Stok'}</label>
-                            <input name="stock" type="number" step="1" min="0" defaultValue={editingProduct?.stock || 0} required className="input" />
-                            {editingProduct && <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--color-neutral)', fontSize: '0.75rem' }}>* Stok ekleme işlemini normalde "Stok Ekle" butonu ile yapınız.</small>}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                             <button type="button" className="btn btn-secondary" onClick={closeProductModal}>İptal</button>
-                            <button type="submit" className="btn btn-primary">Kaydet</button>
+                            <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }}>Kaydet</button>
                         </div>
                     </form>
                 </div>
             )}
 
-            {/* Stock Modal */}
+            {/* Stock Modal - Kept Simple as Requested */}
             {showStockModal && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -164,14 +377,6 @@ export default function ProductsClient({ products }: { products: any[] }) {
                             <label>Ürün Seç</label>
                             <select name="productId" className="input" required>
                                 <option value="">Seçiniz...</option>
-                                {/* Note: Ideally stock modal should have access to ALL products for dropdown, even if pagination limits the table list. 
-                                    However, simple implementation uses just the current list. 
-                                    To fix this proper, we might need a separate 'allProducts' prop or a combobox. 
-                                    For now, we'll use 'products' prop which is the paginated list. 
-                                    This IS a limitation of this refactor (Stock Modal only shows products on valid page).
-                                    To fix, we should probably fetch all products for the Select separately or use an async select. 
-                                    Let's stick to simple first. If user searches, they can find the product.
-                                */}
                                 {products.map(p => (
                                     <option key={p.id} value={p.id}>{p.name} (Mevcut: {p.stock})</option>
                                 ))}

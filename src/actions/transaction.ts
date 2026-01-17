@@ -2,70 +2,169 @@
 
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 
 // Products
-export async function getProducts(options?: { search?: string, page?: number, limit?: number }) {
+export async function getProducts(options?: {
+    search?: string,
+    page?: number,
+    limit?: number,
+    sort?: 'name' | 'stock'
+}) {
     const user = await getSessionUser();
     const where: any = { companyId: user.companyId };
 
     if (options?.search) {
-        where.name = { contains: options.search };
+        where.OR = [
+            { name: { contains: options.search, mode: 'insensitive' } },
+            // Search in compatible models too if applicable
+            { compatibleModels: { contains: options.search, mode: 'insensitive' } }
+        ];
     }
+
+    const orderBy = options?.sort === 'stock' ? { stock: 'asc' } : { name: 'asc' };
 
     const totalCount = await prisma.product.count({ where });
 
     let products;
+
+    // Pagination logic
     if (options?.page && options?.limit) {
         const skip = (options.page - 1) * options.limit;
         products = await prisma.product.findMany({
             where,
-            orderBy: { name: 'asc' },
+            orderBy: orderBy as any,
             take: options.limit,
-            skip
+            skip,
+            include: { supplier: true } // Include supplier info
         });
     } else {
         // Return all if no pagination is requested (for dropdowns)
         products = await prisma.product.findMany({
             where,
-            orderBy: { name: 'asc' }
+            orderBy: orderBy as any,
+            include: { supplier: true }
         });
     }
 
     return {
         products,
         totalCount,
-        totalPages: options?.limit ? Math.ceil(totalCount / options.limit) : 1
+        totalPages: (options?.limit && totalCount > 0) ? Math.ceil(totalCount / options.limit) : 1
     };
+}
+
+// Helper to handle supplier creation/finding
+async function getOrCreateSupplier(companyId: string, supplierName?: string) {
+    if (!supplierName) return null;
+
+    const existing = await prisma.supplier.findFirst({
+        where: { companyId, name: { equals: supplierName, mode: 'insensitive' } }
+    });
+
+    if (existing) return existing.id;
+
+    const newSupplier = await prisma.supplier.create({
+        data: {
+            companyId,
+            name: supplierName
+        }
+    });
+
+    return newSupplier.id;
 }
 
 export async function createProduct(formData: FormData) {
     const user = await getSessionUser();
+
+    // Basic Fields
     const name = formData.get("name") as string;
     const price = Number(formData.get("price"));
     const stock = Number(formData.get("stock"));
+
+    // New Fields
+    const productGroup = formData.get("productGroup") as string;
+    const ledStCode = formData.get("ledStCode") as string;
+    const ledCode = formData.get("ledCode") as string;
+    const compatibleBrand = formData.get("compatibleBrand") as string;
+    const compatibleModels = formData.get("compatibleModels") as string;
+    const inch = formData.get("inch") ? Number(formData.get("inch")) : null;
+    const location = formData.get("location") as string;
+    const cost = formData.get("cost") ? Number(formData.get("cost")) : 0;
+    const imageUrl = formData.get("imageUrl") as string; // Base64
+    const supplierName = formData.get("supplierName") as string;
+
+    const supplierId = await getOrCreateSupplier(user.companyId, supplierName);
 
     await prisma.product.create({
         data: {
             companyId: user.companyId,
             name,
             price,
-            stock
+            stock,
+            productGroup: productGroup || null,
+            ledStCode: ledStCode || null,
+            ledCode: ledCode || null,
+            compatibleBrand: compatibleBrand || null,
+            compatibleModels: compatibleModels || null,
+            inch: inch,
+            location: location || null,
+            cost: cost,
+            imageUrl: imageUrl || null,
+            supplierId: supplierId
         }
     });
     revalidatePath("/products");
 }
 
-export async function updateProduct(id: string, data: { name: string, price: number, stock: number }) {
+export async function updateProduct(id: string, formData: FormData) {
     const user = await getSessionUser();
+
+    // Basic Fields
+    const name = formData.get("name") as string;
+    const price = Number(formData.get("price"));
+    const stock = Number(formData.get("stock"));
+
+    // New Fields
+    const productGroup = formData.get("productGroup") as string;
+    const ledStCode = formData.get("ledStCode") as string;
+    const ledCode = formData.get("ledCode") as string;
+    const compatibleBrand = formData.get("compatibleBrand") as string;
+    const compatibleModels = formData.get("compatibleModels") as string;
+    const inch = formData.get("inch") ? Number(formData.get("inch")) : null;
+    const location = formData.get("location") as string;
+    const cost = formData.get("cost") ? Number(formData.get("cost")) : 0;
+    const imageUrl = formData.get("imageUrl") as string;
+    const supplierName = formData.get("supplierName") as string;
+
+    const supplierId = await getOrCreateSupplier(user.companyId, supplierName);
+
+    const updateData: any = {
+        name,
+        price,
+        stock,
+        productGroup: productGroup || null,
+        ledStCode: ledStCode || null,
+        ledCode: ledCode || null,
+        compatibleBrand: compatibleBrand || null,
+        compatibleModels: compatibleModels || null,
+        inch: inch,
+        location: location || null,
+        cost: cost,
+    };
+
+    // Only update image if a new one is provided (non-empty string)
+    if (imageUrl && imageUrl.length > 0) {
+        updateData.imageUrl = imageUrl;
+    }
+
+    if (supplierName) {
+        updateData.supplierId = supplierId;
+    }
+
     await prisma.product.updateMany({
         where: { id, companyId: user.companyId },
-        data: {
-            name: data.name,
-            price: data.price,
-            stock: data.stock
-        }
+        data: updateData
     });
     revalidatePath("/products");
 }
@@ -73,7 +172,6 @@ export async function updateProduct(id: string, data: { name: string, price: num
 export async function deleteProduct(id: string) {
     const user = await getSessionUser();
     try {
-        // Ensure ownership
         const product = await prisma.product.findFirst({ where: { id, companyId: user.companyId } });
         if (!product) throw new Error("Product not found");
 
@@ -142,8 +240,10 @@ export async function createSale(data: {
                 const product = await tx.product.findFirst({ where: { id: item.productId, companyId: user.companyId } });
 
                 if (!product) throw new Error(`Product ${item.productId} not found`);
+
+                // STOCK CHECK - Throw error if quantity > stock
                 if (product.stock < item.quantity) {
-                    throw new Error(`Stok yetersiz: ${product.name}`);
+                    throw new Error(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, İstenen: ${item.quantity})`);
                 }
 
                 await tx.product.update({

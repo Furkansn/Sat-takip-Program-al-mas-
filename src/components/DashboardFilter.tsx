@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 export default function DashboardFilter() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const currentFilter = searchParams.get("filter") || "all";
+    const currentFilter = searchParams.get("filter") || "today"; // Default to 'today'
 
     const changeFilter = (filter: string) => {
         router.replace(`/?filter=${filter}`, { scroll: false });
@@ -37,10 +37,10 @@ export default function DashboardFilter() {
     return (
         <div style={styles.container}>
             <button
-                onClick={() => changeFilter("all")}
-                style={styles.button(currentFilter === "all")}
+                onClick={() => changeFilter("today")}
+                style={styles.button(currentFilter === "today")}
             >
-                Hepsi
+                Bugün
             </button>
             <button
                 onClick={() => changeFilter("month")}
@@ -49,10 +49,10 @@ export default function DashboardFilter() {
                 Bu Ay
             </button>
             <button
-                onClick={() => changeFilter("today")}
-                style={styles.button(currentFilter === "today")}
+                onClick={() => changeFilter("all")}
+                style={styles.button(currentFilter === "all")}
             >
-                Bugün
+                Hepsi
             </button>
         </div>
     );

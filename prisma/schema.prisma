@@ -25,6 +25,7 @@ model Company {
   sales     Sale[]
   collections Collection[]
   returns     Return[]
+  suppliers   Supplier[]
 }
 
 // AllowedEmail model removed as it's no longer needed
@@ -75,10 +76,37 @@ model Product {
   name        String
   price       Float
   stock       Int      @default(0)
+  
+  // New Fields
+  productGroup    String?   // Ekran, LGP, Ekran Koruma, Kumanda, Led
+  ledStCode       String?
+  ledCode         String?
+  compatibleBrand String?
+  compatibleModels String?
+  inch            Int?
+  location        String?   // Depo konumu
+  cost            Float?    @default(0)
+  imageUrl        String?   // Base64 or URL
+
+  supplierId      String?
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   saleItems   SaleItem[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  name      String
+  products  Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Sale {
