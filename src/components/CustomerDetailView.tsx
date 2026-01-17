@@ -375,40 +375,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         }
     };
 
-    const handleShare = async () => {
-        try {
-            // Check for Secure Context (Required for Web Share API with files)
-            if (!window.isSecureContext) {
-                alert("⚠️ Paylaşım özelliği güvenlik nedeniyle sadece HTTPS (Güvenli Bağlantı) veya Localhost üzerinde çalışır.\n\nŞu an yerel bir IP adresi (HTTP) üzerinden bağlandığınız için tarayıcı bu özelliği engelliyor.\n\nLütfen 'Excel Olarak İndir' butonunu kullanın ve dosyayı WhatsApp'tan manuel olarak gönderin.");
-                return;
-            }
-
-            const wb = createWorkbook();
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const file = new File([blob], `Ekstre_${customer.name}_${customer.surname}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: `Hesap Ekstresi - ${customer.name} ${customer.surname}`,
-                    text: `Müşteri hesap ekstresi ilişiktedir.`
-                });
-            } else {
-                // Determine plausible reason for failure
-                const reason = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
-                    ? "iOS üzerinde bu özelliğin çalışması için dosyayı önce 'Dosyalar'a kaydetmeniz gerekebilir."
-                    : "Tarayıcınız veya cihazınız web üzerinden doğrudan dosya paylaşımını desteklemiyor olabilir.";
-
-                alert("Cihazınız dosya paylaşımını desteklemiyor.\n\n" + reason + "\n\nAlternatif olarak 'Excel Olarak İndir' butonunu kullanabilirsiniz.");
-            }
-        } catch (error) {
-            console.error("Share failed", error);
-            alert("Paylaşım sırasında hata oluştu. Lütfen 'Excel Olarak İndir' seçeneğini deneyin.");
-        }
-    };
-
-    const handlePdfDownload = async () => {
+    const generatePdfDoc = async () => {
         const doc = new jsPDF();
 
         // 0. Load Turkish Fonts (Roboto Regular & Medium)
@@ -620,8 +587,46 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             }
         });
 
+        return doc;
+    };
+
+    const handlePdfDownload = async () => {
+        const doc = await generatePdfDoc();
         const cleanName = `${customer.name}_${customer.surname}`.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
         doc.save(`ekstre_${cleanName}.pdf`);
+    };
+
+    const handleShare = async () => {
+        try {
+            // Check for Secure Context (Required for Web Share API with files)
+            if (!window.isSecureContext) {
+                alert("⚠️ Paylaşım özelliği güvenlik nedeniyle sadece HTTPS (Güvenli Bağlantı) veya Localhost üzerinde çalışır.\n\nŞu an yerel bir IP adresi (HTTP) üzerinden bağlandığınız için tarayıcı bu özelliği engelliyor.\n\nLütfen 'PDF Olarak İndir' butonunu kullanın ve dosyayı WhatsApp'tan manuel olarak gönderin.");
+                return;
+            }
+
+            const doc = await generatePdfDoc();
+            const blob = doc.output('blob');
+            const cleanName = `${customer.name}_${customer.surname}`.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+            const file = new File([blob], `Ekstre_${cleanName}.pdf`, { type: 'application/pdf' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Hesap Ekstresi - ${customer.name} ${customer.surname}`,
+                    text: `Müşteri hesap ekstresi ilişiktedir.`
+                });
+            } else {
+                // Determine plausible reason for failure
+                const reason = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
+                    ? "iOS üzerinde bu özelliğin çalışması için dosyayı önce 'Dosyalar'a kaydetmeniz gerekebilir."
+                    : "Tarayıcınız veya cihazınız web üzerinden doğrudan dosya paylaşımını desteklemiyor olabilir.";
+
+                alert("Cihazınız dosya paylaşımını desteklemiyor.\n\n" + reason + "\n\nAlternatif olarak 'PDF Olarak İndir' butonunu kullanabilirsiniz.");
+            }
+        } catch (error) {
+            console.error("Share failed", error);
+            alert("Paylaşım sırasında hata oluştu. Lütfen 'PDF Olarak İndir' seçeneğini deneyin.");
+        }
     };
 
     async function onAddCollection(formData: FormData) {
