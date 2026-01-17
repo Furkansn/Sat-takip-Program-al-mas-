@@ -16,7 +16,7 @@ export default function SalesList({ sales }: { sales: any[] }) {
     useEffect(() => {
         // Fetch products only when user starts editing
         if (editingSale) {
-            getProducts().then(setProductList);
+            getProducts().then(res => setProductList(res.products || []));
         }
     }, [editingSale]);
 
