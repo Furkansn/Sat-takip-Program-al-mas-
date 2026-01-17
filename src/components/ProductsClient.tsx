@@ -15,7 +15,12 @@ export default function ProductsClient({ products }: { products: any[] }) {
     const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
     const [cost, setCost] = useState<number>(0);
 
+    // Product Group State (Current selection)
+    const [selectedProductGroup, setSelectedProductGroup] = useState<string>("Ekran");
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const isSimpleMode = ["Ekran", "Ekran Koruma", "Kumanda"].includes(selectedProductGroup);
 
     // Reset states when modal closes/opens
     const resetForm = () => {
@@ -23,6 +28,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
         setCalculatedPrice(0);
         setCost(0);
         setEditingProduct(null);
+        setSelectedProductGroup("Ekran");
     };
 
     async function handleSaveProduct(formData: FormData) {
@@ -66,6 +72,8 @@ export default function ProductsClient({ products }: { products: any[] }) {
         setImagePreview(product.imageUrl || null);
         setCost(product.cost || 0);
         setCalculatedPrice(product.price || 0);
+        // Correctly set the group from existing product
+        setSelectedProductGroup(product.productGroup || "Ekran");
         setShowProductModal(true);
     }
 
@@ -197,8 +205,19 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={handleSaveProduct} className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', margin: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+                    <form action={handleSaveProduct} className="card"
+                        style={{
+                            width: '90%',
+                            maxWidth: '800px',
+                            maxHeight: '85vh',  // Reduced slightly to ensure fit on mobile
+                            overflowY: 'auto',
+                            margin: 0,
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}>
+
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
                             <h3 style={{ margin: 0 }}>{editingProduct ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}</h3>
                             {editingProduct && (
                                 <button
@@ -211,81 +230,46 @@ export default function ProductsClient({ products }: { products: any[] }) {
                             )}
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                        {/* Form Content - Scrollable Part */}
+                        <div style={{ flex: 1, paddingBottom: isSimpleMode ? '0' : '0' }}>
 
-                            {/* Left Column - Basic Info */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div>
-                                    <label>Ürün Adı *</label>
-                                    <input name="name" defaultValue={editingProduct?.name} required className="input" />
-                                </div>
-
-                                <div>
-                                    <label>Ürün Grubu *</label>
-                                    <select name="productGroup" defaultValue={editingProduct?.productGroup || ""} required className="input" style={{ height: '42px' }}>
-                                        <option value="">Seçiniz...</option>
-                                        <option value="Ekran">Ekran</option>
-                                        <option value="LGP">LGP</option>
-                                        <option value="Ekran Koruma">Ekran Koruma</option>
-                                        <option value="Kumanda">Kumanda</option>
-                                        <option value="Led">Led</option>
-                                    </select>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div>
-                                        <label>Led St Kodu</label>
-                                        <input name="ledStCode" defaultValue={editingProduct?.ledStCode} className="input" />
-                                    </div>
-                                    <div>
-                                        <label>Led Kodu</label>
-                                        <input name="ledCode" defaultValue={editingProduct?.ledCode} className="input" />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label>Uyumlu Marka</label>
-                                    <input name="compatibleBrand" defaultValue={editingProduct?.compatibleBrand} className="input" placeholder="Örn: Samsung" />
-                                </div>
+                            {/* Product Group - Always Top */}
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Ürün Grubu *</label>
+                                <select
+                                    name="productGroup"
+                                    value={selectedProductGroup}
+                                    onChange={(e) => setSelectedProductGroup(e.target.value)}
+                                    required
+                                    className="input"
+                                    style={{ height: '42px', width: '100%', fontSize: '1rem' }}
+                                >
+                                    <option value="Ekran">Ekran (Varsayılan)</option>
+                                    <option value="Ekran Koruma">Ekran Koruma</option>
+                                    <option value="Kumanda">Kumanda</option>
+                                    <option value="LGP">LGP</option>
+                                    <option value="Led">Led</option>
+                                    <option value="Diğer">Diğer</option>
+                                </select>
                             </div>
 
-                            {/* Middle Column - Compatibility & Details */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div>
-                                    <label>Uyumlu Modeller</label>
-                                    <textarea name="compatibleModels" defaultValue={editingProduct?.compatibleModels} className="input" rows={3} placeholder="Model kodlarını yazınız..." />
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div>
-                                        <label>İnç</label>
-                                        <input name="inch" type="number" defaultValue={editingProduct?.inch} className="input" />
-                                    </div>
-                                    <div>
-                                        <label>Depo Konumu</label>
-                                        <input name="location" defaultValue={editingProduct?.location} className="input" />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label>Tedarikçi</label>
-                                    <input
-                                        name="supplierName"
-                                        list="suppliers"
-                                        defaultValue={editingProduct?.supplier?.name}
-                                        className="input"
-                                        placeholder="Seçiniz veya yazınız"
-                                    />
-                                    {/* Datalist will be populated if we pass suppliers prop, but for now it works as free text input that saves relations on backend */}
-                                    <datalist id="suppliers">
-                                        {/* Ideally passed from props */}
-                                    </datalist>
-                                </div>
+                            {/* Basic Info (Common to all) */}
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label>Ürün Adı *</label>
+                                <input name="name" defaultValue={editingProduct?.name} required className="input" style={{ width: '100%' }} />
                             </div>
 
-                            {/* Right Column - Financials & Image */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div style={{ background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
+                            {/* Financials & Stock (Common to all) */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                                gap: '1rem',
+                                marginBottom: '1.5rem',
+                                background: 'var(--surface-hover)',
+                                padding: '1rem',
+                                borderRadius: '8px'
+                            }}>
+                                <div>
                                     <label>Maliyet ($)</label>
                                     <input
                                         name="cost"
@@ -294,9 +278,11 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                         value={cost}
                                         onChange={handleCostChange}
                                         className="input"
+                                        style={{ width: '100%' }}
                                     />
-
-                                    <label style={{ marginTop: '1rem', display: 'block' }}>Satış Fiyatı ($) <small>(%30 marj)</small></label>
+                                </div>
+                                <div>
+                                    <label>Satış Fiyatı ($)</label>
                                     <input
                                         name="price"
                                         type="number"
@@ -305,10 +291,9 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                         onChange={(e) => setCalculatedPrice(Number(e.target.value))}
                                         required
                                         className="input"
-                                        style={{ fontWeight: 'bold', fontSize: '1.1rem' }}
+                                        style={{ width: '100%', fontWeight: 'bold' }}
                                     />
                                 </div>
-
                                 <div>
                                     <label>Stok Adedi</label>
                                     <input
@@ -317,47 +302,115 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                         defaultValue={editingProduct?.stock || 0}
                                         required
                                         className="input"
+                                        style={{ width: '100%' }}
                                     />
-                                </div>
-
-                                <div>
-                                    <label>Ürün Görseli</label>
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        accept="image/*"
-                                        onChange={handleImageChange}
-                                        style={{ display: 'none' }}
-                                    />
-                                    <div
-                                        onClick={() => fileInputRef.current?.click()}
-                                        style={{
-                                            height: '100px',
-                                            border: '2px dashed var(--border)',
-                                            borderRadius: '8px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            cursor: 'pointer',
-                                            marginTop: '0.5rem',
-                                            overflow: 'hidden',
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        {imagePreview ? (
-                                            <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                        ) : (
-                                            <span style={{ color: 'var(--color-neutral)' }}>Fotoğraf Seç</span>
-                                        )}
-                                    </div>
-                                    {/* Hidden input to ensure value is submitted if no new file is selected but preview exists (edit mode) is handled by state logic in submit, but for native formData we need to ensure the logic works. 
-                                        Actually in handleSaveProduct we check imagePreview state.
-                                    */}
                                 </div>
                             </div>
+
+
+                            {/* Complex Fields - Only shown if NOT simple mode */}
+                            {!isSimpleMode && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+
+                                    {/* Detailed Info */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div>
+                                                <label>Led St Kodu</label>
+                                                <input name="ledStCode" defaultValue={editingProduct?.ledStCode} className="input" />
+                                            </div>
+                                            <div>
+                                                <label>Led Kodu</label>
+                                                <input name="ledCode" defaultValue={editingProduct?.ledCode} className="input" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label>Uyumlu Marka</label>
+                                            <input name="compatibleBrand" defaultValue={editingProduct?.compatibleBrand} className="input" placeholder="Örn: Samsung" />
+                                        </div>
+
+                                        <div>
+                                            <label>Uyumlu Modeller</label>
+                                            <textarea name="compatibleModels" defaultValue={editingProduct?.compatibleModels} className="input" rows={3} placeholder="Model kodlarını yazınız..." />
+                                        </div>
+                                    </div>
+
+                                    {/* Inventory & Supplier */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div>
+                                                <label>İnç</label>
+                                                <input name="inch" type="number" defaultValue={editingProduct?.inch} className="input" />
+                                            </div>
+                                            <div>
+                                                <label>Depo Konumu</label>
+                                                <input name="location" defaultValue={editingProduct?.location} className="input" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label>Tedarikçi</label>
+                                            <input
+                                                name="supplierName"
+                                                list="suppliers"
+                                                defaultValue={editingProduct?.supplier?.name}
+                                                className="input"
+                                                placeholder="Seçiniz veya yazınız"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label>Ürün Görseli</label>
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                accept="image/*"
+                                                onChange={handleImageChange}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <div
+                                                onClick={() => fileInputRef.current?.click()}
+                                                style={{
+                                                    height: '100px',
+                                                    border: '2px dashed var(--border)',
+                                                    borderRadius: '8px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    marginTop: '0.5rem',
+                                                    overflow: 'hidden',
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                {imagePreview ? (
+                                                    <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    <span style={{ color: 'var(--color-neutral)' }}>Fotoğraf Seç</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                        {/* Footer Buttons - Sticky bottom with padding */}
+                        <div style={{
+                            marginTop: 'auto',
+                            paddingTop: '1.5rem',
+                            paddingBottom: '2.5rem', // Extra padding for mobile navbar clearance
+                            borderTop: '1px solid var(--border)',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '0.5rem',
+                            background: 'var(--surface)',  // Ensure it covers content behind it
+                            position: 'sticky',
+                            bottom: 0,
+                            zIndex: 10
+                        }}>
                             <button type="button" className="btn btn-secondary" onClick={closeProductModal}>İptal</button>
                             <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }}>Kaydet</button>
                         </div>
@@ -365,7 +418,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                 </div>
             )}
 
-            {/* Stock Modal - Kept Simple as Requested */}
+            {/* Stock Modal */}
             {showStockModal && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
