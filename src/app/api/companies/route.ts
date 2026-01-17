@@ -4,6 +4,8 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 
+export const dynamic = 'force-dynamic'; // Ensure no caching for this route
+
 export async function GET() {
     try {
         const user = await getSessionUser();
@@ -12,8 +14,9 @@ export async function GET() {
         }
 
         const companies = await prisma.company.findMany({
-            where: { isActive: true }, // or all?
-            select: { id: true, name: true }
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' } // Sort alphabetically
         });
 
         return NextResponse.json(companies);
