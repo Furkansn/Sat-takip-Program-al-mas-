@@ -44,6 +44,9 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  @@index([email])
+  @@index([companyId])
 }
 
 model Customer {
@@ -66,6 +69,10 @@ model Customer {
   sales       Sale[]
   collections Collection[]
   returns     Return[]
+  
+  @@index([companyId])
+  @@index([name, surname])
+  @@index([phone])
 }
 
 model Product {
@@ -95,6 +102,11 @@ model Product {
   updatedAt   DateTime @updatedAt
   
   saleItems   SaleItem[]
+  
+  @@index([companyId])
+  @@index([name])
+  @@index([compatibleModels])
+  @@index([supplierId])
 }
 
 model Supplier {
@@ -107,6 +119,9 @@ model Supplier {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  @@index([companyId])
+  @@index([name])
 }
 
 model Sale {
@@ -126,6 +141,10 @@ model Sale {
   items       SaleItem[]
   
   createdAt   DateTime @default(now())
+  
+  @@index([companyId])
+  @@index([customerId])
+  @@index([date])
 }
 
 model SaleItem {
@@ -144,6 +163,9 @@ model SaleItem {
   appliedDiscountRate Float @default(0)
 
   lineTotal   Float
+  
+  @@index([saleId])
+  @@index([productId])
 }
 
 model Collection {
@@ -158,7 +180,10 @@ model Collection {
   note        String?
   
   createdAt   DateTime @default(now())
-
+  
+  @@index([companyId])
+  @@index([customerId])
+  @@index([date])
 }
 
 model Return {
@@ -174,6 +199,9 @@ model Return {
   items       ReturnItem[]
   
   createdAt   DateTime @default(now())
+  
+  @@index([companyId])
+  @@index([customerId])
 }
 
 model ReturnItem {
@@ -185,5 +213,6 @@ model ReturnItem {
   quantity    Int
   unitPrice   Float
   lineTotal   Float
+  
+  @@index([returnId])
 }
-

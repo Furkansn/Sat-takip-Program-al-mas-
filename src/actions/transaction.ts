@@ -9,7 +9,8 @@ export async function getProducts(options?: {
     search?: string,
     page?: number,
     limit?: number,
-    sort?: 'name' | 'stock'
+    sort?: 'name' | 'stock',
+    fullDetails?: boolean // If false, excludes heavy fields like imageUrl
 }) {
     const user = await getSessionUser();
     const where: any = { companyId: user.companyId };
@@ -26,6 +27,29 @@ export async function getProducts(options?: {
 
     const totalCount = await prisma.product.count({ where });
 
+    // Define select fields to optimize performance (exclude imageUrl by default unless fullDetails is true)
+    // However, since we use imageUrl in the product list, effectively we might need it there.
+    // Ideally, we should only select basic fields for dropdowns.
+
+    // Auto-select optimization:
+    const select = options?.fullDetails ? undefined : {
+        id: true,
+        name: true,
+        price: true,
+        stock: true,
+        productGroup: true,
+        ledStCode: true,
+        ledCode: true,
+        compatibleBrand: true,
+        compatibleModels: true,
+        inch: true,
+        location: true,
+        cost: true,
+        supplierId: true,
+        supplier: true, // Include relation
+        // imageUrl: false // Excluded by default to save bandwidth
+    };
+
     let products;
 
     // Pagination logic
@@ -36,14 +60,21 @@ export async function getProducts(options?: {
             orderBy: orderBy as any,
             take: options.limit,
             skip,
-            include: { supplier: true } // Include supplier info
+            select: select ? { ...select, imageUrl: true } : undefined, // List view needs image usually
+            include: select ? undefined : { supplier: true }
         });
     } else {
-        // Return all if no pagination is requested (for dropdowns)
+        // Return optimized list for dropdowns (no images)
         products = await prisma.product.findMany({
             where,
             orderBy: orderBy as any,
-            include: { supplier: true }
+            select: {
+                id: true,
+                name: true,
+                price: true,
+                stock: true,
+                // No image, no heavy fields
+            }
         });
     }
 
