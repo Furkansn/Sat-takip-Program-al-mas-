@@ -32,30 +32,6 @@ export default function NewSalePage() {
         getCustomers().then(setCustomerList);
     }, []);
 
-    // Effect: Re-calculate prices if Customer (Segment) changes?
-    // Prompt says: "When customer matches... automatic discount active... When product added -> apply."
-    // It implies if I change customer mid-way, should prices update?
-    // "Müşteri değişince... discount active... ürün satırı eklenince... otomatik gelsin."
-    // Usually, changing customer should probably update existing lines or at least future lines.
-    // Let's update existing lines to be helpful, but preserve manual overrides if any? 
-    // Complexity: User might have manually set a price.
-    // Simple approach: When customer changes, we just update the 'appliedDiscountRate' state for context, 
-    // and if the user adds NEW items, they get new rate.
-    // BUT, the prompt says "Ürün satırı eklenince... otomatik gelsin".
-    // Let's sticking to: When adding item, use current rate.
-    // However, if I select customer AFTER adding items? 
-    // Let's auto-update items that match the product list price, i.e., "reset" them to discounted price.
-
-    useEffect(() => {
-        if (selectedCustomerId) {
-            // Optional: You could ask to re-apply discounts.
-            // For simplicity, let's just make sure NEW items get the rate.
-            // And maybe update items that are currently just placeholders?
-            // Let's just rely on handleProductChange for now.
-        }
-    }, [selectedCustomerId]);
-
-
     const handleProductChange = (index: number, productId: string) => {
         const product = productList.find(p => p.id === productId);
         const newItems = [...items];
@@ -112,6 +88,17 @@ export default function NewSalePage() {
             return;
         }
 
+        // Final Stock Check
+        for (const item of items) {
+            if (item.productId) {
+                const product = productList.find(p => p.id === item.productId);
+                if (product && item.quantity > product.stock) {
+                    alert(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, İstenen: ${item.quantity})`);
+                    return;
+                }
+            }
+        }
+
         try {
             setLoading(true);
             await createSale({
@@ -145,8 +132,6 @@ export default function NewSalePage() {
                         value={selectedCustomerId}
                         onChange={(e) => {
                             setSelectedCustomerId(e.target.value);
-                            // We do NOT auto-update items here to avoid overwriting manual changes, 
-                            // but the user can re-select products to apply new rates if needed.
                         }}
                         style={{ width: '100%' }}
                     >
@@ -172,7 +157,9 @@ export default function NewSalePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {items.map((item, index) => {
                         const product = productList.find(p => p.id === item.productId);
-                        const isStockInsufficient = product && item.quantity > product.stock;
+                        // User Request: Show remaining stock in yellow (or red if insufficient)
+                        const remaining = product ? product.stock - item.quantity : 0;
+                        const isInsufficient = product && remaining < 0;
 
                         return (
                             <div key={index} className="sale-item-row" style={{ alignItems: 'flex-start' }}>
@@ -185,11 +172,15 @@ export default function NewSalePage() {
                                         style={{ width: '100%', height: '36px', fontSize: '0.9rem', padding: '0 0.5rem' }}
                                     >
                                         <option value="">Seçiniz</option>
-                                        {productList.map(p => (
-                                            <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                                                {p.name} (${p.price}) {p.stock <= 5 ? `(Son ${p.stock})` : ''}
-                                            </option>
-                                        ))}
+                                        {productList.map(p => {
+                                            // User Request: Hide out of stock items entirely
+                                            if (p.stock <= 0) return null;
+                                            return (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name} (Stok: {p.stock} | ${p.price})
+                                                </option>
+                                            )
+                                        })}
                                     </select>
                                     {!item.productId && (
                                         <input
@@ -215,25 +206,28 @@ export default function NewSalePage() {
                                             height: '36px',
                                             padding: '0 0.25rem',
                                             width: '100%',
-                                            borderColor: isStockInsufficient ? '#ef4444' : undefined,
-                                            color: isStockInsufficient ? '#ef4444' : undefined
+                                            borderColor: isInsufficient ? '#ef4444' : undefined,
+                                            color: isInsufficient ? '#ef4444' : undefined
                                         }}
                                     />
-                                    {isStockInsufficient && (
+                                    {/* Stock Remaining Warning */}
+                                    {product && (
                                         <div style={{
                                             position: 'absolute',
                                             top: '100%',
                                             left: 0,
                                             right: 0,
                                             fontSize: '0.65rem',
-                                            color: '#ef4444',
+                                            color: isInsufficient ? '#ef4444' : '#eab308',
+                                            fontWeight: 'bold',
                                             marginTop: '2px',
                                             whiteSpace: 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
-                                            zIndex: 10
+                                            zIndex: 10,
+                                            textAlign: 'center'
                                         }}>
-                                            Stok: {product.stock}
+                                            {isInsufficient ? 'Yetersiz!' : `Kalan: ${remaining}`}
                                         </div>
                                     )}
                                 </div>
