@@ -116,7 +116,39 @@ export default function NewSalePage() {
     };
 
     return (
-        <main className="container" style={{ maxWidth: '800px' }}>
+        <main className="container" style={{ maxWidth: '1200px' }}>
+            <style jsx>{`
+                .sale-grid {
+                    display: grid;
+                    grid-template-columns: minmax(200px, 4fr) 100px 120px 120px 40px;
+                    gap: 1rem;
+                    align-items: start;
+                    padding-bottom: 1rem;
+                    border-bottom: 1px solid var(--border);
+                }
+
+                @media (max-width: 768px) {
+                    .sale-grid {
+                        grid-template-columns: 1fr 1fr;
+                        grid-template-areas: 
+                            "product product"
+                            "qty price"
+                            "total remove";
+                        gap: 0.75rem;
+                        background: rgba(255,255,255,0.03);
+                        padding: 1rem;
+                        border-radius: 8px;
+                    }
+                    .area-product { grid-area: product; }
+                    .area-qty { grid-area: qty; }
+                    .area-price { grid-area: price; }
+                    .area-total { grid-area: total; display: flex; align-items: center; gap: 0.5rem; }
+                    .area-remove { grid-area: remove; justify-self: end; }
+                    
+                    
+                }
+            `}</style>
+
             <div style={{ marginBottom: '1.5rem' }}>
                 <Link href="/sales" style={{ textDecoration: 'none', color: 'var(--color-neutral)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                     ← Geri Dön
@@ -127,29 +159,30 @@ export default function NewSalePage() {
             <div className="card">
                 <div style={{ marginBottom: '1.5rem', background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Müşteri</label>
-                    <select
-                        className="select"
-                        value={selectedCustomerId}
-                        onChange={(e) => {
-                            setSelectedCustomerId(e.target.value);
-                        }}
-                        style={{ width: '100%' }}
-                    >
-                        <option value="">Müşteri Seç...</option>
-                        {customerList.map(c => (
-                            <option key={c.id} value={c.id}>
-                                {c.name} {c.surname} {c.segment && c.segment !== 'bronze' ? `(${c.segment.toUpperCase()} - %${(c.segment === 'gold' ? 10 : 5)})` : ''}
-                            </option>
-                        ))}
-                    </select>
-                    {discountRate > 0 && (
-                        <div style={{ marginTop: '0.5rem', color: '#16a34a', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span className="badge" style={{ background: '#dcfce7', color: '#16a34a' }}>
-                                %{(discountRate * 100).toFixed(0)} İNDİRİM AKTİF
-                            </span>
-                            <span>(Liste fiyatları üzerinden otomatik düşülür)</span>
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <select
+                            className="select"
+                            value={selectedCustomerId}
+                            onChange={(e) => {
+                                setSelectedCustomerId(e.target.value);
+                            }}
+                            style={{ flex: 1, minWidth: '250px' }}
+                        >
+                            <option value="">Müşteri Seç...</option>
+                            {customerList.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name} {c.surname} {c.segment && c.segment !== 'bronze' ? `(${c.segment.toUpperCase()} - %${(c.segment === 'gold' ? 10 : 5)})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        {discountRate > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#16a34a', flexShrink: 0 }}>
+                                <span className="badge" style={{ background: '#dcfce7', color: '#16a34a', fontSize: '1rem', padding: '0.5rem 1rem' }}>
+                                    %{(discountRate * 100).toFixed(0)} İNDİRİM
+                                </span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Ürünler</h3>
@@ -157,31 +190,21 @@ export default function NewSalePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {items.map((item, index) => {
                         const product = productList.find(p => p.id === item.productId);
-                        // User Request: Show remaining stock in yellow (or red if insufficient)
                         const remaining = product ? product.stock - item.quantity : 0;
                         const isInsufficient = product && remaining < 0;
 
                         return (
-                            <div key={index} style={{
-                                display: 'grid',
-                                // Using grid to layout: Product(Flexible), Qty(70px), Price(90px), Total(90px), Delete(30px)
-                                gridTemplateColumns: 'minmax(0, 1fr) 70px 90px minmax(70px, 90px) 30px',
-                                gap: '10px',
-                                alignItems: 'start',
-                                paddingBottom: '1rem',
-                                borderBottom: '1px solid var(--border)'
-                            }}>
-                                <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Ürün</label>
+                            <div key={index} className="sale-grid">
+                                <div className="area-product">
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Ürün</label>
                                     <select
                                         className="select"
                                         value={item.productId}
                                         onChange={(e) => handleProductChange(index, e.target.value)}
-                                        style={{ width: '100%', height: '36px', fontSize: '0.9rem', padding: '0 0.5rem' }}
+                                        style={{ width: '100%', height: '42px' }}
                                     >
                                         <option value="">Seçiniz</option>
                                         {productList.map(p => {
-                                            // User Request: Hide out of stock items entirely
                                             if (p.stock <= 0) return null;
                                             return (
                                                 <option key={p.id} value={p.id}>
@@ -195,14 +218,14 @@ export default function NewSalePage() {
                                             className="input"
                                             placeholder="Ürün adı..."
                                             value={item.productName}
-                                            style={{ marginTop: '0.25rem', height: '30px', fontSize: '0.8rem', width: '100%' }}
+                                            style={{ marginTop: '0.5rem', width: '100%' }}
                                             onChange={(e) => updateItem(index, 'productName', e.target.value)}
                                         />
                                     )}
                                 </div>
 
-                                <div style={{ position: 'relative' }}>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'center' }}>Adet</label>
+                                <div className="area-qty" style={{ position: 'relative' }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'center' }}>Adet</label>
                                     <input
                                         type="number"
                                         className="input"
@@ -211,11 +234,12 @@ export default function NewSalePage() {
                                         onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
                                         style={{
                                             textAlign: 'center',
-                                            height: '36px',
-                                            padding: '0 0.25rem',
+                                            height: '42px',
                                             width: '100%',
                                             borderColor: isInsufficient ? '#ef4444' : undefined,
-                                            color: isInsufficient ? '#ef4444' : undefined
+                                            color: isInsufficient ? '#ef4444' : undefined,
+                                            fontWeight: 'bold',
+                                            fontSize: '1.1rem'
                                         }}
                                     />
                                     {product && (
@@ -224,13 +248,11 @@ export default function NewSalePage() {
                                             top: '100%',
                                             left: 0,
                                             right: 0,
-                                            fontSize: '0.65rem',
+                                            fontSize: '0.7rem',
                                             color: isInsufficient ? '#ef4444' : '#eab308',
                                             fontWeight: 'bold',
-                                            marginTop: '2px',
+                                            marginTop: '4px',
                                             whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
                                             textAlign: 'center'
                                         }}>
                                             {isInsufficient ? 'Yetersiz!' : `Kalan: ${remaining}`}
@@ -238,28 +260,28 @@ export default function NewSalePage() {
                                     )}
                                 </div>
 
-                                <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'right' }}>Birim ($)</label>
+                                <div className="area-price">
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block', textAlign: 'right' }}>Birim ($)</label>
                                     <input
                                         type="number"
                                         className="input"
                                         value={item.unitPrice}
                                         onChange={(e) => updateItem(index, 'unitPrice', Number(e.target.value))}
-                                        style={{ textAlign: 'right', height: '36px', padding: '0 0.25rem', width: '100%' }}
+                                        style={{ textAlign: 'right', height: '42px', width: '100%' }}
                                     />
                                     {item.listUnitPrice > item.unitPrice && (
-                                        <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginTop: '2px', textAlign: 'right', textDecoration: 'line-through' }}>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginTop: '2px', textAlign: 'right', textDecoration: 'line-through' }}>
                                             Liste: ${item.listUnitPrice}
                                         </div>
                                     )}
                                 </div>
 
-                                <div style={{ textAlign: 'right', marginTop: '1.4rem' }}>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginBottom: '0.2rem', display: 'none' }}>Toplam</div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>${(item.quantity * item.unitPrice).toLocaleString()}</div>
+                                <div className="area-total" style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', paddingTop: '1.5rem' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.2rem' }}>Toplam</div>
+                                    <div style={{ fontWeight: 800, fontSize: '1.1rem', whiteSpace: 'nowrap' }}>${(item.quantity * item.unitPrice).toLocaleString()}</div>
                                 </div>
 
-                                <div>
+                                <div className="area-remove" style={{ paddingTop: '1.5rem' }}>
                                     <button
                                         type="button"
                                         onClick={() => removeItem(index)}
@@ -270,10 +292,9 @@ export default function NewSalePage() {
                                             color: 'var(--color-neutral)',
                                             background: 'rgba(255,255,255,0.1)',
                                             borderRadius: '50%',
-                                            width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             border: 'none',
                                             cursor: 'pointer',
-                                            marginTop: '1.2rem'
                                         }}
                                     >
                                         ✕
@@ -284,39 +305,39 @@ export default function NewSalePage() {
                     })}
                 </div>
 
-                <button type="button" onClick={addItem} className="btn" style={{ border: '1px dashed var(--border)', width: '100%', marginTop: '1rem', color: 'var(--color-neutral)' }}>
-                    + Kalem Ekle
+                <button type="button" onClick={addItem} className="btn" style={{ border: '2px dashed var(--border)', width: '100%', marginTop: '1.5rem', padding: '1rem', color: 'var(--color-neutral)', fontWeight: 600 }}>
+                    + Yeni Ürün Satırı Ekle
                 </button>
 
-                <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
-
-                    {discountRate > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: 'var(--color-neutral)' }}>
-                            <span>Ara Toplam (Liste):</span>
-                            <span>${calculateListTotal().toLocaleString()}</span>
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: '2rem', paddingTop: '2rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                        {discountRate > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', color: 'var(--color-neutral)', fontSize: '1.1rem' }}>
+                                <span>Liste Toplamı:</span>
+                                <span>${calculateListTotal().toLocaleString()}</span>
+                            </div>
+                        )}
+                        {discountRate > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', color: '#16a34a', fontSize: '1.1rem' }}>
+                                <span>İndirim Tutarı:</span>
+                                <span>-${(calculateListTotal() - calculateTotal()).toLocaleString()}</span>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '2rem', fontWeight: 800, marginTop: '0.5rem' }}>
+                            <div>Genel Toplam:</div>
+                            <div>${calculateTotal().toLocaleString()}</div>
                         </div>
-                    )}
-                    {discountRate > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#16a34a' }}>
-                            <span>Segment İndirimi (%{(discountRate * 100).toFixed(0)}):</span>
-                            <span>-${(calculateListTotal() - calculateTotal()).toLocaleString()}</span>
-                        </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                        <div>Genel Toplam:</div>
-                        <div>${calculateTotal().toLocaleString()}</div>
                     </div>
 
-                    <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+                    <div style={{ marginTop: '2rem', textAlign: 'right' }}>
                         <button
                             type="button"
                             className="btn btn-primary"
                             onClick={handleSubmit}
                             disabled={loading}
-                            style={{ minWidth: '150px' }}
+                            style={{ padding: '1rem 3rem', fontSize: '1.2rem' }}
                         >
-                            {loading ? "Kaydediliyor..." : "Satışı Tamamla"}
+                            {loading ? "Kaydediliyor..." : "Satışı Tamamla ✓"}
                         </button>
                     </div>
                 </div>
