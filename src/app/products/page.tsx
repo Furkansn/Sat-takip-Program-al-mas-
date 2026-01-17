@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getProducts } from "@/actions/transaction";
 import ProductsClient from "@/components/ProductsClient";
 import SearchInput from "@/components/SearchInput";
+import ProductFilter from "@/components/ProductFilter";
 
 export default async function ProductsPage({
     searchParams,
@@ -9,16 +10,20 @@ export default async function ProductsPage({
     searchParams?: {
         search?: string;
         page?: string;
+        group?: string; // Add group param
     };
 }) {
     const page = Number(searchParams?.page) || 1;
     const search = searchParams?.search || "";
+    const group = searchParams?.group || undefined;
     const limit = 10;
 
     const { products, totalPages } = await getProducts({
         search,
         page,
-        limit
+        limit,
+        productGroup: group, // Pass filter to action
+        fullDetails: true // We need image and details for the popup
     });
 
     return (
@@ -27,11 +32,18 @@ export default async function ProductsPage({
                 <h1 style={{ margin: 0 }}>Ürünler</h1>
             </div>
 
-            <SearchInput placeholder="Ürün ara..." />
+            <div style={{ display: 'flex', gap: '1rem', width: '100%', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                    <SearchInput placeholder="Ürün ara..." />
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                    <ProductFilter />
+                </div>
+            </div>
 
             <ProductsClient products={products} />
 
-            {/* Pagination - Reuse logic from SalesPage, maybe componentize later */}
+            {/* Pagination */}
             {totalPages > 1 && (
                 <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (

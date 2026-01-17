@@ -10,6 +10,9 @@ export default function ProductsClient({ products }: { products: any[] }) {
     const [showStockModal, setShowStockModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<any>(null);
 
+    // View Modal State
+    const [viewingProduct, setViewingProduct] = useState<any>(null);
+
     // Image & Price Calculation States
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
@@ -67,14 +70,18 @@ export default function ProductsClient({ products }: { products: any[] }) {
         router.refresh();
     }
 
-    function openEditModal(product: any) {
+    function openEditModal(product: any, e?: React.MouseEvent) {
+        e?.stopPropagation(); // Prevent row click
         setEditingProduct(product);
         setImagePreview(product.imageUrl || null);
         setCost(product.cost || 0);
         setCalculatedPrice(product.price || 0);
-        // Correctly set the group from existing product
         setSelectedProductGroup(product.productGroup || "Ekran");
         setShowProductModal(true);
+    }
+
+    function openViewModal(product: any) {
+        setViewingProduct(product);
     }
 
     function closeProductModal() {
@@ -163,7 +170,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-neutral)' }}>Ürün bulunamadı.</td>
                             </tr>
                         ) : products.map(p => (
-                            <tr key={p.id}>
+                            <tr key={p.id} onClick={() => openViewModal(p)} style={{ cursor: 'pointer' }} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                                 <td>
                                     {p.imageUrl ? (
                                         <img src={p.imageUrl} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
@@ -186,7 +193,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
                                     <button
-                                        onClick={() => openEditModal(p)}
+                                        onClick={(e) => openEditModal(p, e)}
                                         className="btn btn-secondary"
                                         style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
                                     >
@@ -198,6 +205,82 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     </tbody>
                 </table>
             </div>
+
+            {/* View Product Modal */}
+            {viewingProduct && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+                    backdropFilter: 'blur(4px)'
+                }} onClick={() => setViewingProduct(null)}>
+                    <div
+                        className="card"
+                        style={{ width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', margin: 0, position: 'relative' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setViewingProduct(null)}
+                            style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--color-neutral)' }}
+                        >
+                            ✕
+                        </button>
+
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            {viewingProduct.imageUrl ? (
+                                <img src={viewingProduct.imageUrl} alt={viewingProduct.name} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain' }} />
+                            ) : (
+                                <div style={{ width: '100%', height: '150px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-neutral)' }}>
+                                    Görsel Yok
+                                </div>
+                            )}
+                        </div>
+
+                        <h2 style={{ marginBottom: '0.5rem' }}>{viewingProduct.name}</h2>
+                        <div className="badge" style={{ display: 'inline-block', marginBottom: '1.5rem' }}>{viewingProduct.productGroup}</div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--color-neutral)' }}>Fiyat</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>${viewingProduct.price.toLocaleString()}</div>
+                            </div>
+                            <div style={{ background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--color-neutral)' }}>Stok</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{viewingProduct.stock}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.9rem' }}>
+                            <div>
+                                <strong>Uyumlu Marka:</strong> <br />
+                                {viewingProduct.compatibleBrand || '-'}
+                            </div>
+                            <div>
+                                <strong>Depo Konumu:</strong> <br />
+                                {viewingProduct.location || '-'}
+                            </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <strong>Uyumlu Modeller:</strong> <br />
+                                {viewingProduct.compatibleModels || '-'}
+                            </div>
+                            {viewingProduct.supplier && (
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <strong>Tedarikçi:</strong> <br />
+                                    {viewingProduct.supplier.name}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { setViewingProduct(null); openEditModal(viewingProduct); }}>
+                                Düzenle
+                            </button>
+                            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setViewingProduct(null)}>
+                                Kapat
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Product Modal (Create/Edit) */}
             {showProductModal && (

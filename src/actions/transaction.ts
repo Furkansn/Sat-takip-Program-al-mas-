@@ -10,7 +10,8 @@ export async function getProducts(options?: {
     page?: number,
     limit?: number,
     sort?: 'name' | 'stock',
-    fullDetails?: boolean // If false, excludes heavy fields like imageUrl
+    fullDetails?: boolean, // If false, excludes heavy fields like imageUrl
+    productGroup?: string // New filter
 }) {
     const user = await getSessionUser();
     const where: any = { companyId: user.companyId };
@@ -21,6 +22,10 @@ export async function getProducts(options?: {
             // Search in compatible models too if applicable
             { compatibleModels: { contains: options.search, mode: 'insensitive' } }
         ];
+    }
+
+    if (options?.productGroup) {
+        where.productGroup = options.productGroup;
     }
 
     const orderBy = options?.sort === 'stock' ? { stock: 'asc' } : { name: 'asc' };
