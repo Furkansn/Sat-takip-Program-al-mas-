@@ -514,7 +514,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         const balance = customer.balance;
 
         doc.setDrawColor(200);
-        doc.setFillColor(250);
+        doc.setFillColor(250, 250, 250);
         doc.rect(14, 35, 182, 35, 'FD'); // Increased height
 
         doc.setTextColor(0);
