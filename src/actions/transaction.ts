@@ -28,8 +28,6 @@ export async function getProducts(options?: {
     const totalCount = await prisma.product.count({ where });
 
     // Define select fields to optimize performance (exclude imageUrl by default unless fullDetails is true)
-    // However, since we use imageUrl in the product list, effectively we might need it there.
-    // Ideally, we should only select basic fields for dropdowns.
 
     // Auto-select optimization:
     const select = options?.fullDetails ? undefined : {
@@ -46,8 +44,8 @@ export async function getProducts(options?: {
         location: true,
         cost: true,
         supplierId: true,
-        supplier: true, // Include relation
-        // imageUrl: false // Excluded by default to save bandwidth
+        supplier: true, // Include relation in select
+        // imageUrl: false // Excluded by default
     };
 
     let products;
@@ -55,14 +53,22 @@ export async function getProducts(options?: {
     // Pagination logic
     if (options?.page && options?.limit) {
         const skip = (options.page - 1) * options.limit;
-        products = await prisma.product.findMany({
+
+        // Use spread syntax to avoid passing both select and include
+        const queryOptions: any = {
             where,
             orderBy: orderBy as any,
             take: options.limit,
             skip,
-            select: select ? { ...select, imageUrl: true } : undefined, // List view needs image usually
-            include: select ? undefined : { supplier: true }
-        });
+        };
+
+        if (select) {
+            queryOptions.select = { ...select, imageUrl: true }; // List view usually needs image
+        } else {
+            queryOptions.include = { supplier: true };
+        }
+
+        products = await prisma.product.findMany(queryOptions);
     } else {
         // Return optimized list for dropdowns (no images)
         products = await prisma.product.findMany({
