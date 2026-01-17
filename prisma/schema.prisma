@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  users     User[]
+  customers Customer[]
+  products  Product[]
+  sales     Sale[]
+  collections Collection[]
+  returns     Return[]
+}
+
+// AllowedEmail model removed as it's no longer needed
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?  // Copied from prompt requirements, nullable for existing google users migration (though we are switching)
+  fullName  String?
+  role      String   @default("user") // super_admin, company_admin, user
+  isActive  Boolean  @default(true)
+  lastLoginAt DateTime?
+  
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+  
+  name        String
+  surname     String
+  phone       String?
+  address     String?
+  city        String?
+  taxId       String?
+  riskLimit   Float    @default(0)
+  segment     String   @default("bronze") // gold, silver, bronze
+  segmentUpdatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  sales       Sale[]
+  collections Collection[]
+  returns     Return[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  name        String
+  price       Float
+  stock       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  saleItems   SaleItem[]
+}
+
+model Sale {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  date        DateTime @default(now())
+  totalAmount Float
+  
+  // Snapshot fields for segmentation
+  segmentAtTime String @default("bronze")
+  discountRateAtTime Float @default(0)
+
+  items       SaleItem[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  
+  productName String
+  quantity    Int
+  unitPrice   Float // This is the discounted price
+  
+  // Snapshot fields for price calculation transparency
+  listUnitPrice Float @default(0)
+  appliedDiscountRate Float @default(0)
+
+  lineTotal   Float
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  date        DateTime @default(now())
+  amount      Float    // Always in USD
+  note        String?
+  
+  createdAt   DateTime @default(now())
+
+}
+
+model Return {
+  id          String   @id @default(cuid())
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  date        DateTime @default(now())
+  totalAmount Float
+
+  items       ReturnItem[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model ReturnItem {
+  id        String  @id @default(cuid())
+  returnId  String
+  return    Return  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  
+  productName String
+  quantity    Int
+  unitPrice   Float
+  lineTotal   Float
+}
+
