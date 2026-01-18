@@ -8,18 +8,22 @@ export default async function CustomersPage({
 }: {
     searchParams?: {
         query?: string;
+        showInactive?: string;
     };
 }) {
     const query = searchParams?.query || "";
-    const customers = await getCustomers(query);
+    const showInactive = searchParams?.showInactive === "true";
+    const customers = await getCustomers(query, showInactive);
 
     return (
         <main className="container">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h1>Müşteriler</h1>
-                <Link href="/customers/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                    + Yeni Müşteri
-                </Link>
+                <div>
+                    <Link href="/customers/new" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                        + Yeni Müşteri
+                    </Link>
+                </div>
             </div>
 
             <Search placeholder="İsim, soyisim veya telefon ile ara..." />

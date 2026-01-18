@@ -61,6 +61,7 @@ model Customer {
   address     String?
   city        String?
   taxId       String?
+  isActive    Boolean  @default(true)
   riskLimit   Float    @default(0)
   segment     String   @default("bronze") // gold, silver, bronze
   segmentUpdatedAt DateTime @default(now())

@@ -5,16 +5,17 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 
-export async function getCustomers(query: string = "") {
+export async function getCustomers(query: string = "", showInactive: boolean = false) {
     const user = await getSessionUser();
 
     return await prisma.customer.findMany({
         where: {
             companyId: user.companyId,
+            isActive: showInactive ? undefined : true,
             OR: [
-                { name: { contains: query } },
-                { surname: { contains: query } },
-                { phone: { contains: query } }
+                { name: { contains: query, mode: 'insensitive' } },
+                { surname: { contains: query, mode: 'insensitive' } },
+                { phone: { contains: query, mode: 'insensitive' } }
             ]
         },
         include: {
@@ -24,6 +25,23 @@ export async function getCustomers(query: string = "") {
         },
         orderBy: { createdAt: 'desc' }
     });
+}
+
+export async function toggleCustomerStatus(customerId: string, isActive: boolean) {
+    const user = await getSessionUser();
+
+    // Limit to admin roles if desired, but for now just company check
+    if (user.role !== 'company_admin' && user.role !== 'super_admin') {
+        throw new Error("Unauthorized");
+    }
+
+    await prisma.customer.updateMany({
+        where: { id: customerId, companyId: user.companyId },
+        data: { isActive }
+    });
+
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${customerId}`);
 }
 
 export async function createCustomer(formData: FormData) {
