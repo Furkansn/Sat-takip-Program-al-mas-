@@ -23,7 +23,10 @@ export async function createCompany(prevState: any, formData: FormData) {
     }
 
     const name = formData.get("name") as string;
-    const isActive = formData.get("isActive") === "on";
+    // Fix: existing code expects "on" but UI usually sends "true" from select. 
+    // Let's support both for isActive to be safe, but reportsEnabled will use "true" from Select.
+    const isActive = formData.get("isActive") === "true" || formData.get("isActive") === "on";
+    const reportsEnabled = formData.get("reportsEnabled") === "true";
 
     if (!name || name.length < 2) {
         return { message: "Firma adı en az 2 karakter olmalıdır." };
@@ -38,7 +41,8 @@ export async function createCompany(prevState: any, formData: FormData) {
         await prisma.company.create({
             data: {
                 name,
-                isActive
+                isActive,
+                reportsEnabled
             }
         });
 
@@ -58,6 +62,7 @@ export async function updateCompany(prevState: any, formData: FormData) {
     const id = formData.get("id") as string;
     const name = formData.get("name") as string;
     const isActive = formData.get("isActive") === "true"; // Handle boolean from select/checkbox properly
+    const reportsEnabled = formData.get("reportsEnabled") === "true";
 
     if (!id) return { message: "ID eksik" };
     if (!name || name.length < 2) return { message: "Geçersiz isim" };
@@ -65,12 +70,13 @@ export async function updateCompany(prevState: any, formData: FormData) {
     try {
         await prisma.company.update({
             where: { id },
-            data: { name, isActive }
+            data: { name, isActive, reportsEnabled }
         });
         revalidatePath("/admin/companies");
         return { success: true, message: "Firma güncellendi" };
     } catch (error) {
-        return { message: "Güncelleme hatası" };
+        console.error("Update Company Error:", error);
+        return { message: "Güncelleme hatası: " + (error as Error).message };
     }
 }
 

@@ -41,7 +41,14 @@ export default function NewSalePage() {
             newItems[index].productName = product.name;
             newItems[index].listUnitPrice = product.price;
             newItems[index].appliedDiscountRate = discountRate;
-            newItems[index].unitPrice = product.price * (1 - discountRate);
+
+            const calculatedPrice = product.price * (1 - discountRate);
+            // Safe Price Check (Cost Rule)
+            const safePrice = (product.cost && product.cost > 0)
+                ? Math.max(calculatedPrice, product.cost)
+                : calculatedPrice;
+
+            newItems[index].unitPrice = safePrice;
         } else {
             // Reset if empty
             newItems[index].productName = "";
@@ -267,8 +274,35 @@ export default function NewSalePage() {
                                         className="input"
                                         value={item.unitPrice}
                                         onChange={(e) => updateItem(index, 'unitPrice', Number(e.target.value))}
+                                        onBlur={() => {
+                                            if (product && product.cost && product.cost > 0) {
+                                                if (item.unitPrice < product.cost) {
+                                                    updateItem(index, 'unitPrice', product.cost);
+                                                }
+                                            }
+                                        }}
                                         style={{ textAlign: 'right', height: '42px', width: '100%' }}
                                     />
+                                    {/* Cost Warning Badge */}
+                                    {product && product.cost > 0 && (product.price * (1 - discountRate)) < product.cost && (
+                                        <div style={{
+                                            fontSize: '0.7rem',
+                                            color: '#854d0e', // Dark yellow/brown
+                                            background: '#fef9c3', // Light yellow
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            marginTop: '4px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'flex-end',
+                                            fontWeight: 600,
+                                            border: '1px solid #fde047'
+                                        }}>
+                                            <span style={{ marginRight: '4px' }}>⚠️</span>
+                                            min tutar: ${product.cost}
+                                        </div>
+                                    )}
+
                                     {item.listUnitPrice > item.unitPrice && (
                                         <div style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginTop: '2px', textAlign: 'right', textDecoration: 'line-through' }}>
                                             Liste: ${item.listUnitPrice}

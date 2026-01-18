@@ -84,6 +84,7 @@ export async function getProducts(options?: {
                 name: true,
                 price: true,
                 stock: true,
+                cost: true,
                 // No image, no heavy fields
             }
         });
@@ -263,34 +264,57 @@ export async function createSale(data: {
         });
 
         // 2. Create Items & Decrement Stock
+        // 2. Create Items & Decrement Stock
         for (const item of data.items) {
-            await tx.saleItem.create({
-                data: {
-                    saleId: sale.id,
-                    productId: item.productId || null,
-                    productName: item.productName,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    lineTotal: item.quantity * item.unitPrice,
-                    listUnitPrice: item.listUnitPrice || item.unitPrice, // Fallback if missing
-                    appliedDiscountRate: item.appliedDiscountRate || 0
-                }
-            });
-
             if (item.productId) {
-                // Ensure product ownership
+                // Ensure product ownership and fetch details for validation
                 const product = await tx.product.findFirst({ where: { id: item.productId, companyId: user.companyId } });
 
                 if (!product) throw new Error(`Product ${item.productId} not found`);
 
-                // STOCK CHECK - Throw error if quantity > stock
+                // STOCK CHECK
                 if (product.stock < item.quantity) {
                     throw new Error(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, İstenen: ${item.quantity})`);
                 }
 
+                // COST CHECK (Zararına Satış Engelleme)
+                if (product.cost && product.cost > 0) {
+                    // Allow a very small epsilon for floating point comparison if needed, but strict check is usually fine for verification
+                    if (item.unitPrice < product.cost) {
+                        throw new Error(`Hata: ${product.name} için satış fiyatı maliyetin (${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.cost)}) altında olamaz.`);
+                    }
+                }
+
+                await tx.saleItem.create({
+                    data: {
+                        saleId: sale.id,
+                        productId: item.productId,
+                        productName: item.productName || product.name,
+                        quantity: item.quantity,
+                        unitPrice: item.unitPrice,
+                        lineTotal: item.quantity * item.unitPrice,
+                        listUnitPrice: item.listUnitPrice || item.unitPrice,
+                        appliedDiscountRate: item.appliedDiscountRate || 0
+                    }
+                });
+
                 await tx.product.update({
                     where: { id: item.productId },
                     data: { stock: { decrement: item.quantity } }
+                });
+            } else {
+                // Non-product item (service etc) - just create
+                await tx.saleItem.create({
+                    data: {
+                        saleId: sale.id,
+                        productId: null,
+                        productName: item.productName,
+                        quantity: item.quantity,
+                        unitPrice: item.unitPrice,
+                        lineTotal: item.quantity * item.unitPrice,
+                        listUnitPrice: item.listUnitPrice || item.unitPrice,
+                        appliedDiscountRate: item.appliedDiscountRate || 0
+                    }
                 });
             }
         }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createUser, updateUser } from "@/actions/admin";
 
 type Company = {
@@ -87,14 +88,12 @@ export default function UserManagement({ initialUsers, companies }: { initialUse
     return (
         <main className="container pb-24">
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight mb-1 text-white">Admin Paneli</h1>
-                </div>
+            {/* Header (Unified) */}
+            <div className="admin-companies-header">
+                {/* Left: Action Button */}
                 <button
                     onClick={openNewModal}
-                    className="btn btn-primary h-11 px-6 whitespace-nowrap self-start sm:self-auto"
+                    className="btn btn-primary h-10 px-6 whitespace-nowrap flex items-center gap-2"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -102,6 +101,24 @@ export default function UserManagement({ initialUsers, companies }: { initialUse
                     </svg>
                     Yeni Kullanıcı
                 </button>
+
+                {/* Right: Toggle Switch */}
+                <div className="admin-companies-right">
+                    <Link
+                        href="/admin/companies"
+                        className="btn btn-secondary bg-transparent border-white/10 text-neutral-400 h-10 px-4 text-sm font-semibold flex items-center justify-center no-underline hover:text-white"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        Firmalar
+                    </Link>
+                    <Link
+                        href="/admin/users"
+                        className="btn btn-primary text-white shadow-lg shadow-blue-500/20 h-10 px-4 text-sm font-semibold flex items-center justify-center no-underline"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        Kullanıcılar
+                    </Link>
+                </div>
             </div>
 
             {/* Content Panel */}
