@@ -98,6 +98,13 @@ export default function CompanyManagement({ initialCompanies }: { initialCompani
                     >
                         Kullanıcılar
                     </Link>
+                    <Link
+                        href="/admin/bulk-import"
+                        className="btn btn-secondary bg-transparent border-white/10 text-neutral-400 h-10 px-4 text-sm font-semibold flex items-center justify-center no-underline hover:text-white"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        Veri Yükleme
+                    </Link>
                 </div>
             </div>
 

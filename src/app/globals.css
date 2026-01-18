@@ -1115,3 +1115,200 @@ select.filter-control {
         margin-bottom: 0 !important;
     }
 }
+
+/* --- Bulk Import Wizard --- */
+.bulk-import-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .bulk-import-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.bulk-import-stepper {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+    border: 2px solid var(--border);
+    color: var(--color-neutral);
+    background: var(--surface);
+    font-size: 0.9rem;
+}
+
+.bulk-import-stepper.active {
+    border-color: var(--primary-blue);
+    background: var(--primary-blue);
+    color: white;
+    box-shadow: 0 0 0 4px var(--primary-glow);
+}
+
+.bulk-import-choice {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: left;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bulk-import-choice:hover {
+    background: var(--surface-hover);
+    border-color: var(--primary-blue);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.05);
+}
+
+.bulk-import-choice.selected {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.bulk-import-choice .choice-header {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: rgb(var(--foreground-rgb));
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bulk-import-choice .choice-desc {
+    font-size: 0.9rem;
+    color: var(--color-neutral);
+    line-height: 1.5;
+}
+
+.bulk-import-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.bulk-import-dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: var(--surface);
+    transition: all 0.2s;
+    cursor: pointer;
+    position: relative;
+}
+
+.bulk-import-dropzone:hover {
+    border-color: var(--primary-blue);
+    background: var(--surface-hover);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* --- Bulk Stepper (Horizontal) --- */
+.bulk-stepper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    width: 100%;
+}
+
+.bulk-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.bulk-step-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--surface-hover);
+    font-weight: 800;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.bulk-step-idle {
+    color: var(--color-neutral);
+    opacity: 0.7;
+}
+
+.bulk-step-active {
+    color: var(--primary-blue);
+    border-color: rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.05);
+    box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.bulk-step-active .bulk-step-icon {
+    border-color: var(--primary-blue);
+    background: var(--primary-blue);
+    color: white;
+}
+
+.bulk-step-done {
+    color: var(--primary-blue);
+    border-color: rgba(37, 99, 235, 0.25);
+    opacity: 0.9;
+}
+
+.bulk-step-done .bulk-step-icon {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.2);
+    color: var(--primary-blue);
+}
+
+.bulk-step-connector {
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--border);
+    min-width: 20px;
+}
+
+.bulk-step-connector.done {
+    background: rgba(37, 99, 235, 0.35);
+}
+
+/* Hide connectors on very small screens where it wraps heavily */
+@media (max-width: 640px) {
+    .bulk-step-connector {
+        display: none;
+    }
+
+    .bulk-stepper {
+        gap: 8px;
+        justify-content: center;
+    }
+}
