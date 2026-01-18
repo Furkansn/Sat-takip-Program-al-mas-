@@ -28,7 +28,7 @@ export default function ReportsFilter() {
         const val = e.target.value;
         setSelectedMonth(val);
 
-        const params = new URLSearchParams(searchParams);
+        const params = new URLSearchParams(searchParams.toString());
         if (val) {
             params.set("month", val);
         } else {
