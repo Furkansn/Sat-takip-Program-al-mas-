@@ -45,7 +45,13 @@ export async function getDashboardStats(filter: FilterType = 'all') {
         _sum: { amount: true },
         where: { companyId: user.companyId }
     });
-    const totalBalance = (globalSales._sum.totalAmount || 0) - (globalCollection._sum.amount || 0);
+    const globalReturns = await prisma.return.aggregate({
+        _sum: { totalAmount: true },
+        where: { companyId: user.companyId }
+    });
+    const totalBalance = (globalSales._sum.totalAmount || 0)
+        - (globalCollection._sum.amount || 0)
+        - (globalReturns._sum.totalAmount || 0);
 
     return {
         sales: sales._sum.totalAmount || 0,
