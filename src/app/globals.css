@@ -1312,3 +1312,66 @@ select.filter-control {
         justify-content: center;
     }
 }
+
+/* Combo Box Styles */
+.combo {
+    position: relative;
+    width: 100%;
+}
+
+.combo-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 250px;
+    overflow-y: auto;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-top: 4px;
+    z-index: 1000;
+    box-shadow: var(--card-shadow);
+    list-style: none;
+    padding: 0;
+}
+
+/* Scrollbar for combo list */
+.combo-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.combo-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.combo-list::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 3px;
+}
+
+.combo-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 0.95rem;
+    color: rgb(var(--foreground-rgb));
+    transition: background-color 0.1s;
+}
+
+.combo-item:last-child {
+    border-bottom: none;
+}
+
+.combo-item:hover,
+.combo-item.active {
+    background-color: var(--surface-hover);
+    color: var(--primary-blue);
+}
+
+.combo-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--color-neutral);
+    font-size: 0.9rem;
+}

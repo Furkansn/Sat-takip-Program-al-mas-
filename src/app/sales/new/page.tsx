@@ -1,10 +1,168 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSale, getProducts } from "@/actions/transaction";
 import { getCustomers } from "@/actions/customer";
 import Link from "next/link";
+
+
+const ProductCombobox = ({
+    products,
+    selectedId,
+    onSelect
+}: {
+    products: any[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+}) => {
+    const [query, setQuery] = useState("");
+    const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // Sync query with selected product name
+    useEffect(() => {
+        const selected = products.find(p => p.id === selectedId);
+        if (selected) {
+            setQuery(selected.name);
+        } else {
+            // Keep query if typing, but if selectedId becomes empty externally, we might want to clear?
+            // However, logic below handles query->selectedId. 
+            // If selectedId is empty, it implies no product selected.
+            // But we might be in the middle of typing.
+            // So only clear if query matches a product that is NO LONGER selected?
+            // Safer: if selectedId is empty, DON'T force clear query immediately to allow typing,
+            // UNLESS query matches a product name strictly.
+            // Actually, simplest: if selectedId empty, and query matched a product, clear it?
+            // Let's just trust onBlur to reset/clear.
+        }
+    }, [selectedId, products]);
+
+    // BUT we need to initialize query on mount if value exists or when value changes 
+    // AND we are not currently typing (document.activeElement check?)
+    // This sync is tricky. Let's try:
+    // If selectedId changes, update query to name.
+
+    useEffect(() => {
+        const selected = products.find(p => p.id === selectedId);
+        if (selected) {
+            setQuery(selected.name);
+        }
+        // If !selected, do not force clear, user might be typing "App"
+    }, [selectedId, products]);
+
+
+    const filteredProducts = useMemo(() => {
+        // Always filter logic
+        const lowerQuery = query.toLowerCase();
+        return products.filter(p => {
+            if (p.stock <= 0) return false;
+            // If query is empty, allow all? Or nothing?
+            // User: "Dropdown aç/kapa focus... list allows select"
+            // Usually empty query -> show all.
+            if (!query) return true;
+
+            const matchName = p.name?.toLowerCase().includes(lowerQuery);
+            const matchSku = p.sku?.toLowerCase().includes(lowerQuery);
+            return matchName || matchSku;
+        });
+    }, [products, query]);
+
+    // Click outside to close
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+
+                // On blur/close without selection:
+                const selected = products.find(p => p.id === selectedId);
+                if (selected) {
+                    setQuery(selected.name); // Revert to selected name
+                } else {
+                    setQuery(""); // Clear if invalid
+                }
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [selectedId, products, query]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (!isOpen) {
+            if (e.key === "ArrowDown" || e.key === "Enter") {
+                setIsOpen(true);
+            }
+            return;
+        }
+
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev + 1) % filteredProducts.length);
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev - 1 + filteredProducts.length) % filteredProducts.length);
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (filteredProducts.length > 0) {
+                const product = filteredProducts[highlightedIndex];
+                if (product) {
+                    onSelect(product.id);
+                    setIsOpen(false);
+                    inputRef.current?.blur();
+                }
+            }
+        } else if (e.key === "Escape") {
+            setIsOpen(false);
+            inputRef.current?.blur();
+        }
+    };
+
+    return (
+        <div className="combo" ref={containerRef}>
+            <input
+                ref={inputRef}
+                className="input combo-input"
+                value={query}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (!isOpen) setIsOpen(true);
+                    setHighlightedIndex(0);
+                    if (e.target.value === "") {
+                        onSelect(""); // Clear selection
+                    }
+                }}
+                onFocus={() => setIsOpen(true)}
+                placeholder="Ürün ara..."
+                onKeyDown={handleKeyDown}
+                style={{ width: '100%', height: '42px' }}
+                autoComplete="off"
+            />
+            {isOpen && (
+                <ul className="combo-list">
+                    {filteredProducts.length === 0 ? (
+                        <li className="combo-empty">Sonuç yok</li>
+                    ) : (
+                        filteredProducts.map((p, index) => (
+                            <li
+                                key={p.id}
+                                className={`combo-item ${index === highlightedIndex ? 'active' : ''}`}
+                                onClick={() => {
+                                    onSelect(p.id);
+                                    setIsOpen(false);
+                                }}
+                                onMouseEnter={() => setHighlightedIndex(index)}
+                            >
+                                {p.name} <span style={{ opacity: 0.7, fontSize: '0.85em' }}>(Stok: {p.stock} | ${p.price})</span>
+                            </li>
+                        ))
+                    )}
+                </ul>
+            )}
+        </div>
+    );
+};
 
 export default function NewSalePage() {
     const router = useRouter();
@@ -204,22 +362,11 @@ export default function NewSalePage() {
                             <div key={index} className="sale-grid">
                                 <div className="area-product">
                                     <label style={{ fontSize: '0.75rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Ürün</label>
-                                    <select
-                                        className="select"
-                                        value={item.productId}
-                                        onChange={(e) => handleProductChange(index, e.target.value)}
-                                        style={{ width: '100%', height: '42px' }}
-                                    >
-                                        <option value="">Seçiniz</option>
-                                        {productList.map(p => {
-                                            if (p.stock <= 0) return null;
-                                            return (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.name} (Stok: {p.stock} | ${p.price})
-                                                </option>
-                                            )
-                                        })}
-                                    </select>
+                                    <ProductCombobox
+                                        products={productList}
+                                        selectedId={item.productId}
+                                        onSelect={(id) => handleProductChange(index, id)}
+                                    />
                                     {!item.productId && (
                                         <input
                                             className="input"
