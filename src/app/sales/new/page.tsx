@@ -187,7 +187,7 @@ export default function NewSalePage() {
     // Fetch initial data
     useEffect(() => {
         getProducts().then(data => setProductList(data.products));
-        getCustomers().then(setCustomerList);
+        getCustomers().then(data => setCustomerList(data.customers));
     }, []);
 
     const handleProductChange = (index: number, productId: string) => {
@@ -504,6 +504,10 @@ export default function NewSalePage() {
                                 <span>-${(calculateListTotal() - calculateTotal()).toLocaleString()}</span>
                             </div>
                         )}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '1.2rem', color: 'var(--color-neutral)', marginTop: '0.5rem' }}>
+                            <div>Toplam Adet:</div>
+                            <div>{items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                        </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '2rem', fontWeight: 800, marginTop: '0.5rem' }}>
                             <div>Genel Toplam:</div>
                             <div>${calculateTotal().toLocaleString()}</div>

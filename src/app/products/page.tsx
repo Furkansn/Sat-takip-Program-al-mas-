@@ -3,6 +3,7 @@ import { getProducts } from "@/actions/transaction";
 import ProductsClient from "@/components/ProductsClient";
 import SearchInput from "@/components/SearchInput";
 import ProductFilter from "@/components/ProductFilter";
+import Pagination from "@/components/Pagination";
 
 export default async function ProductsPage({
     searchParams,
@@ -44,27 +45,12 @@ export default async function ProductsPage({
             <ProductsClient products={products} />
 
             {/* Pagination */}
-            {totalPages > 1 && (
-                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                        <Link
-                            key={p}
-                            href={{
-                                pathname: '/products',
-                                query: { ...searchParams, page: p }
-                            }}
-                            className={`btn ${p === page ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                opacity: p === page ? 1 : 0.7,
-                                textDecoration: 'none'
-                            }}
-                        >
-                            {p}
-                        </Link>
-                    ))}
-                </div>
-            )}
+            <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                searchParams={searchParams}
+                baseUrl="/products"
+            />
         </main>
     );
 }

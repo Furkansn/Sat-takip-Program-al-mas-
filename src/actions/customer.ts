@@ -5,26 +5,47 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 
-export async function getCustomers(query: string = "", showInactive: boolean = false) {
+export async function getCustomers(
+    query: string = "",
+    showInactive: boolean = false,
+    page: number = 1,
+    limit: number = 10
+) {
     const user = await getSessionUser();
 
-    return await prisma.customer.findMany({
-        where: {
-            companyId: user.companyId,
-            isActive: showInactive ? undefined : true,
-            OR: [
-                { name: { contains: query, mode: 'insensitive' } },
-                { surname: { contains: query, mode: 'insensitive' } },
-                { phone: { contains: query, mode: 'insensitive' } }
-            ]
-        },
-        include: {
-            sales: { select: { totalAmount: true } },
-            collections: { select: { amount: true } },
-            returns: { select: { totalAmount: true } }
-        },
-        orderBy: { createdAt: 'desc' }
-    });
+    const where: any = {
+        companyId: user.companyId,
+        isActive: showInactive ? undefined : true,
+    };
+
+    if (query) {
+        where.OR = [
+            { name: { contains: query, mode: 'insensitive' } },
+            { surname: { contains: query, mode: 'insensitive' } },
+            { phone: { contains: query, mode: 'insensitive' } }
+        ];
+    }
+
+    const [totalCount, customers] = await Promise.all([
+        prisma.customer.count({ where }),
+        prisma.customer.findMany({
+            where,
+            include: {
+                sales: { select: { totalAmount: true } },
+                collections: { select: { amount: true } },
+                returns: { select: { totalAmount: true } }
+            },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit
+        })
+    ]);
+
+    return {
+        customers,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount
+    };
 }
 
 export async function toggleCustomerStatus(customerId: string, isActive: boolean) {

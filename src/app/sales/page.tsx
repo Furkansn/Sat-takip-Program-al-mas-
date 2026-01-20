@@ -4,6 +4,7 @@ import { getSales, getProducts } from "@/actions/transaction";
 import { getCustomers } from "@/actions/customer";
 import SalesFilter from "@/components/SalesFilter";
 import SalesList from "@/components/SalesList";
+import Pagination from "@/components/Pagination";
 
 import { getCurrentCompany } from "@/actions/company";
 
@@ -72,7 +73,7 @@ export default async function SalesPage({
 
             {/* Filter Component */}
             <React.Suspense fallback={<div className="card" style={{ height: '100px' }}>Yükleniyor...</div>}>
-                <SalesFilter customers={customers} products={productsData.products} />
+                <SalesFilter customers={customers.customers} products={productsData.products} />
             </React.Suspense>
 
             <div style={{ padding: 0 }}>
@@ -87,25 +88,12 @@ export default async function SalesPage({
                         <SalesList sales={sales} />
 
                         {/* Pagination */}
-                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                <Link
-                                    key={p}
-                                    href={{
-                                        pathname: '/sales',
-                                        query: { ...searchParams, page: p }
-                                    }}
-                                    className={`btn ${p === page ? 'btn-primary' : 'btn-secondary'}`}
-                                    style={{
-                                        padding: '0.5rem 1rem',
-                                        opacity: p === page ? 1 : 0.7,
-                                        textDecoration: 'none'
-                                    }}
-                                >
-                                    {p}
-                                </Link>
-                            ))}
-                        </div>
+                        <Pagination
+                            currentPage={page}
+                            totalPages={totalPages}
+                            searchParams={searchParams}
+                            baseUrl="/sales"
+                        />
                     </>
                 )}
             </div>

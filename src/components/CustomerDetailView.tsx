@@ -794,10 +794,25 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                         {customer.sales.length === 0 ? <p style={{ color: 'var(--color-neutral)', marginTop: '1rem' }}>Henüz satış yok.</p> : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {customer.sales.map((sale: any) => (
-                                    <div key={sale.id} onClick={() => openEditModal(sale)} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', cursor: 'pointer', transition: 'background 0.2s', padding: '0.5rem', borderRadius: '8px' }} className="hover:bg-white/5">
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <span style={{ fontSize: '1rem', fontWeight: 800, color: 'rgb(var(--foreground-rgb))' }}>{new Date(sale.date).toLocaleDateString('tr-TR')}</span>
+                                    <div
+                                        key={sale.id}
+                                        onClick={() => openEditModal(sale)}
+                                        className="sale-card"
+                                        style={{
+                                            border: '1px solid var(--border)',
+                                            padding: '1.25rem',
+                                            cursor: 'pointer',
+                                            borderRadius: '12px',
+                                            background: 'var(--surface)',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <div style={{ background: 'var(--primary-blue)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
+                                                    {new Date(sale.date).getDate()} {new Date(sale.date).toLocaleDateString('tr-TR', { month: 'short' })}
+                                                </div>
+                                                <span style={{ fontSize: '0.9rem', color: 'var(--color-neutral)' }}>{new Date(sale.date).getFullYear()}</span>
                                                 {sale.discountRateAtTime > 0 && <span className="badge" style={{ fontSize: '0.7em', background: '#ecfccb', color: '#4d7c0f' }}>%{(sale.discountRateAtTime * 100).toFixed(0)} İndirim</span>}
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -805,14 +820,33 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                                 <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>${sale.totalAmount.toLocaleString('en-US')}</span>
                                             </div>
                                         </div>
-                                        <ul style={{ paddingLeft: '1.2rem', color: 'var(--color-neutral)', fontSize: '0.9rem', margin: 0 }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.5rem', padding: '0 0.5rem' }}>
                                             {sale.items.map((item: any, idx: number) => (
-                                                <li key={idx}>
-                                                    {item.productName} — {item.quantity} x ${item.unitPrice}
-                                                    {item.appliedDiscountRate > 0 && <span style={{ opacity: 0.7, marginLeft: '5px' }}>(Liste: ${item.listUnitPrice})</span>}
-                                                </li>
+                                                <div key={idx} style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'start',
+                                                    fontSize: '0.9rem',
+                                                    color: 'var(--color-neutral)',
+                                                    padding: '8px 0',
+                                                    borderBottom: idx === sale.items.length - 1 ? 'none' : '1px solid var(--border)'
+                                                }}>
+                                                    <div style={{ flex: 1, paddingRight: '1rem' }}>
+                                                        <span style={{ color: 'rgb(var(--foreground-rgb))' }}>• {item.productName}</span>
+                                                    </div>
+                                                    <div style={{ whiteSpace: 'nowrap', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                        <span style={{ fontWeight: 500 }}>
+                                                            {item.quantity} x ${item.unitPrice.toLocaleString('en-US')}
+                                                        </span>
+                                                        {item.appliedDiscountRate > 0 && (
+                                                            <span style={{ fontSize: '0.75rem', opacity: 0.7, textDecoration: 'line-through' }}>
+                                                                ${item.listUnitPrice.toLocaleString('en-US')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             ))}
-                                        </ul>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1107,9 +1141,12 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <div className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', margin: 0 }}>
-                        <h3>Satışı Düzenle</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                    <div className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '70vh', margin: 0, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                            <h3 style={{ margin: 0, textAlign: 'center' }}>Satışı Düzenle</h3>
+                        </div>
+
+                        <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {editFormItems.map((item, index) => (
                                 <div key={index}
                                     style={{
@@ -1187,13 +1224,13 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                     </div>
                                 </div>
                             ))}
+
+                            <button type="button" onClick={addEditItem} className="btn" style={{ border: '1px dashed var(--border)', width: '100%', marginTop: '0.5rem', color: 'var(--color-neutral)' }}>
+                                + Kalem Ekle
+                            </button>
                         </div>
 
-                        <button type="button" onClick={addEditItem} className="btn" style={{ border: '1px dashed var(--border)', width: '100%', marginTop: '1rem', color: 'var(--color-neutral)' }}>
-                            + Kalem Ekle
-                        </button>
-
-                        <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ borderTop: '1px solid var(--border)', padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', flexShrink: 0 }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
                                 Toplam: ${calculateEditTotal().toLocaleString('en-US')}
                             </div>

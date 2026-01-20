@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCustomers } from "@/actions/customer";
 import Search from "@/components/Search";
 import CustomerRow from "@/components/CustomerRow";
+import Pagination from "@/components/Pagination";
 
 export default async function CustomersPage({
     searchParams,
@@ -9,11 +10,15 @@ export default async function CustomersPage({
     searchParams?: {
         query?: string;
         showInactive?: string;
+        page?: string;
     };
 }) {
     const query = searchParams?.query || "";
     const showInactive = searchParams?.showInactive === "true";
-    const customers = await getCustomers(query, showInactive);
+    const page = Number(searchParams?.page) || 1;
+    const limit = 10;
+
+    const { customers, totalPages } = await getCustomers(query, showInactive, page, limit);
 
     return (
         <main className="container">
@@ -52,6 +57,13 @@ export default async function CustomersPage({
                     </tbody>
                 </table>
             </div>
+
+            <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                searchParams={searchParams}
+                baseUrl="/customers"
+            />
         </main>
     );
 }
