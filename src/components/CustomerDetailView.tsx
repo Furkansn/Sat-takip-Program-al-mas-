@@ -25,10 +25,10 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
     const [loading, setLoading] = useState(false);
 
     // Return Form State
-    const [returnItems, setReturnItems] = useState([{ productName: "", quantity: 1, unitPrice: 0 }]);
+    const [returnItems, setReturnItems] = useState<any[]>([{ productName: "", quantity: "", unitPrice: "" }]);
 
     const addReturnItem = () => {
-        setReturnItems([...returnItems, { productName: "", quantity: 1, unitPrice: 0 }]);
+        setReturnItems([...returnItems, { productName: "", quantity: "", unitPrice: "" }]);
     };
 
     const removeReturnItem = (index: number) => {
@@ -46,7 +46,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
     };
 
     const calculateReturnTotal = () => {
-        return returnItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        return returnItems.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
     };
 
     async function onSaveReturn() {
@@ -56,9 +56,13 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         }
         try {
             setLoading(true);
-            await createReturn(customer.id, returnItems);
+            await createReturn(customer.id, returnItems.map(i => ({
+                ...i,
+                quantity: Number(i.quantity || 0),
+                unitPrice: Number(i.unitPrice || 0)
+            })));
             setShowReturnModal(false);
-            setReturnItems([{ productName: "", quantity: 1, unitPrice: 0 }]); // Reset
+            setReturnItems([{ productName: "", quantity: "", unitPrice: "" }]); // Reset
             router.refresh();
         } catch (e: any) {
             alert(e.message);
@@ -954,7 +958,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                             className="input"
                                             value={item.quantity}
                                             min="1"
-                                            onChange={(e) => updateReturnItem(index, 'quantity', Number(e.target.value))}
+                                            onChange={(e) => updateReturnItem(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))}
                                             style={{ textAlign: 'center', height: '36px', padding: '0 0.25rem', width: '100%' }}
                                         />
                                     </div>
@@ -965,14 +969,14 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                             type="number"
                                             className="input"
                                             value={item.unitPrice}
-                                            onChange={(e) => updateReturnItem(index, 'unitPrice', Number(e.target.value))}
+                                            onChange={(e) => updateReturnItem(index, 'unitPrice', e.target.value === '' ? '' : Number(e.target.value))}
                                             style={{ textAlign: 'right', height: '36px', padding: '0 0.25rem', width: '100%' }}
                                         />
                                     </div>
 
                                     <div style={{ flex: '0 0 auto', textAlign: 'right', minWidth: '80px', flexShrink: 0 }}>
                                         <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginBottom: '0.2rem' }}>Toplam</div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>${(item.quantity * item.unitPrice).toLocaleString('en-US')}</div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>${(Number(item.quantity || 0) * Number(item.unitPrice || 0)).toLocaleString('en-US')}</div>
                                     </div>
 
                                     <div style={{ width: '30px', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>

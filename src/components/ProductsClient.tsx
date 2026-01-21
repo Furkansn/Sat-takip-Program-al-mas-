@@ -15,8 +15,8 @@ export default function ProductsClient({ products }: { products: any[] }) {
 
     // Image & Price Calculation States
     const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
-    const [cost, setCost] = useState<number>(0);
+    const [calculatedPrice, setCalculatedPrice] = useState<number | string>("");
+    const [cost, setCost] = useState<number | string>("");
 
     // Product Group State (Current selection)
     const [selectedProductGroup, setSelectedProductGroup] = useState<string>("Ekran");
@@ -28,8 +28,8 @@ export default function ProductsClient({ products }: { products: any[] }) {
     // Reset states when modal closes/opens
     const resetForm = () => {
         setImagePreview(null);
-        setCalculatedPrice(0);
-        setCost(0);
+        setCalculatedPrice("");
+        setCost("");
         setEditingProduct(null);
         setSelectedProductGroup("Ekran");
     };
@@ -74,8 +74,8 @@ export default function ProductsClient({ products }: { products: any[] }) {
         e?.stopPropagation(); // Prevent row click
         setEditingProduct(product);
         setImagePreview(product.imageUrl || null);
-        setCost(product.cost || 0);
-        setCalculatedPrice(product.price || 0);
+        setCost(product.cost || "");
+        setCalculatedPrice(product.price || "");
         setSelectedProductGroup(product.productGroup || "Ekran");
         setShowProductModal(true);
     }
@@ -126,11 +126,13 @@ export default function ProductsClient({ products }: { products: any[] }) {
 
     // Price Calculation
     const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = Number(e.target.value);
+        const val = e.target.value === '' ? '' : Number(e.target.value);
         setCost(val);
         // %30 profit margin logic: Price = Cost * 1.30
-        const suggestedPrice = Number((val * 1.30).toFixed(2));
-        setCalculatedPrice(suggestedPrice);
+        if (typeof val === 'number') {
+            const suggestedPrice = Number((val * 1.30).toFixed(2));
+            setCalculatedPrice(suggestedPrice);
+        }
     };
 
     return (
@@ -371,7 +373,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                         type="number"
                                         step="0.01"
                                         value={calculatedPrice}
-                                        onChange={(e) => setCalculatedPrice(Number(e.target.value))}
+                                        onChange={(e) => setCalculatedPrice(e.target.value === '' ? '' : Number(e.target.value))}
                                         required
                                         className="input"
                                         style={{ width: '100%', fontWeight: 'bold' }}
@@ -382,7 +384,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                     <input
                                         name="stock"
                                         type="number"
-                                        defaultValue={editingProduct?.stock || 0}
+                                        defaultValue={editingProduct?.stock}
                                         required
                                         className="input"
                                         style={{ width: '100%' }}

@@ -173,7 +173,7 @@ export default function NewSalePage() {
 
     // Form State
     const [selectedCustomerId, setSelectedCustomerId] = useState("");
-    const [items, setItems] = useState<any[]>([{ productId: "", productName: "", quantity: 1, unitPrice: 0, listUnitPrice: 0, appliedDiscountRate: 0 }]);
+    const [items, setItems] = useState<any[]>([{ productId: "", productName: "", quantity: "", unitPrice: "", listUnitPrice: 0, appliedDiscountRate: 0 }]);
     const [loading, setLoading] = useState(false);
 
     // Derived State
@@ -208,9 +208,8 @@ export default function NewSalePage() {
 
             newItems[index].unitPrice = safePrice;
         } else {
-            // Reset if empty
             newItems[index].productName = "";
-            newItems[index].unitPrice = 0;
+            newItems[index].unitPrice = "";
             newItems[index].listUnitPrice = 0;
             newItems[index].appliedDiscountRate = 0;
         }
@@ -224,7 +223,7 @@ export default function NewSalePage() {
     };
 
     const addItem = () => {
-        setItems([...items, { productId: "", productName: "", quantity: 1, unitPrice: 0, listUnitPrice: 0, appliedDiscountRate: discountRate }]);
+        setItems([...items, { productId: "", productName: "", quantity: "", unitPrice: "", listUnitPrice: 0, appliedDiscountRate: discountRate }]);
     };
 
     const removeItem = (index: number) => {
@@ -236,11 +235,11 @@ export default function NewSalePage() {
     };
 
     const calculateTotal = () => {
-        return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        return items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
     };
 
     const calculateListTotal = () => {
-        return items.reduce((sum, item) => sum + (item.quantity * (item.listUnitPrice || item.unitPrice)), 0);
+        return items.reduce((sum, item) => sum + (Number(item.quantity || 0) * (item.listUnitPrice || Number(item.unitPrice || 0))), 0);
     };
 
     const handleSubmit = async () => {
@@ -270,7 +269,11 @@ export default function NewSalePage() {
                 customerId: selectedCustomerId,
                 segmentAtTime: segment,
                 discountRateAtTime: discountRate,
-                items
+                items: items.map(i => ({
+                    ...i,
+                    quantity: Number(i.quantity || 0),
+                    unitPrice: Number(i.unitPrice || 0)
+                }))
             });
             router.push("/sales");
         } catch (e: any) {
@@ -385,7 +388,7 @@ export default function NewSalePage() {
                                         className="input"
                                         value={item.quantity}
                                         min="1"
-                                        onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                                        onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : Number(e.target.value))}
                                         style={{
                                             textAlign: 'center',
                                             height: '42px',
@@ -420,10 +423,10 @@ export default function NewSalePage() {
                                         type="number"
                                         className="input"
                                         value={item.unitPrice}
-                                        onChange={(e) => updateItem(index, 'unitPrice', Number(e.target.value))}
+                                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : Number(e.target.value))}
                                         onBlur={() => {
                                             if (product && product.cost && product.cost > 0) {
-                                                if (item.unitPrice < product.cost) {
+                                                if (Number(item.unitPrice) < product.cost) {
                                                     updateItem(index, 'unitPrice', product.cost);
                                                 }
                                             }
