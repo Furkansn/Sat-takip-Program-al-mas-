@@ -250,9 +250,58 @@ export async function createSale(data: {
     // Calculate total
     const totalAmount = data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
 
-    // Transaction: Create Sale -> Create Items -> Decrement Stock
+    // 1. Fetch all products upfront to minimize queries inside transaction
+    const productIds: string[] = [];
+    const productQuantities = new Map<string, number>();
+
+    for (const item of data.items) {
+        if (item.productId) {
+            productIds.push(item.productId);
+            const currentQty = productQuantities.get(item.productId) || 0;
+            productQuantities.set(item.productId, currentQty + item.quantity);
+        }
+    }
+
+    const uniqueProductIds = Array.from(new Set(productIds));
+    const products = await prisma.product.findMany({
+        where: {
+            id: { in: uniqueProductIds },
+            companyId: user.companyId
+        }
+    });
+
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    // 2. Perform validations (Stock & Cost) BEFORE transaction
+    for (const pid of uniqueProductIds) {
+        if (!productMap.has(pid)) throw new Error(`Product not found (ID: ${pid})`);
+    }
+
+    // Check Stock (aggregated)
+    for (const [pid, qty] of Array.from(productQuantities)) {
+        const product = productMap.get(pid)!;
+        if (product.stock < qty) {
+            throw new Error(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, Toplam İstenen: ${qty})`);
+        }
+    }
+
+    // Check Cost (per item line)
+    for (const item of data.items) {
+        if (item.productId) {
+            const product = productMap.get(item.productId)!;
+            // COST CHECK (Zararına Satış Engelleme)
+            if (product.cost && product.cost > 0) {
+                // Allow a very small epsilon for floating point comparison if needed, but strict check is usually fine for verification
+                if (item.unitPrice < product.cost) {
+                    throw new Error(`Hata: ${product.name} için satış fiyatı maliyetin (${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.cost)}) altında olamaz.`);
+                }
+            }
+        }
+    }
+
+    // 3. Transaction: Create Sale -> Batch Create Items -> Batch/Parallel Update Stock
     await prisma.$transaction(async (tx) => {
-        // 1. Create Sale
+        // A. Create Sale
         const sale = await tx.sale.create({
             data: {
                 companyId: user.companyId,
@@ -263,61 +312,46 @@ export async function createSale(data: {
             }
         });
 
-        // 2. Create Items & Decrement Stock
-        // 2. Create Items & Decrement Stock
-        for (const item of data.items) {
+        // B. Create Items (Batch)
+        const saleItemsData = data.items.map(item => {
+            let productName = item.productName;
             if (item.productId) {
-                // Ensure product ownership and fetch details for validation
-                const product = await tx.product.findFirst({ where: { id: item.productId, companyId: user.companyId } });
-
-                if (!product) throw new Error(`Product ${item.productId} not found`);
-
-                // STOCK CHECK
-                if (product.stock < item.quantity) {
-                    throw new Error(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, İstenen: ${item.quantity})`);
-                }
-
-                // COST CHECK (Zararına Satış Engelleme)
-                if (product.cost && product.cost > 0) {
-                    // Allow a very small epsilon for floating point comparison if needed, but strict check is usually fine for verification
-                    if (item.unitPrice < product.cost) {
-                        throw new Error(`Hata: ${product.name} için satış fiyatı maliyetin (${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.cost)}) altında olamaz.`);
-                    }
-                }
-
-                await tx.saleItem.create({
-                    data: {
-                        saleId: sale.id,
-                        productId: item.productId,
-                        productName: item.productName || product.name,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        lineTotal: item.quantity * item.unitPrice,
-                        listUnitPrice: item.listUnitPrice || item.unitPrice,
-                        appliedDiscountRate: item.appliedDiscountRate || 0
-                    }
-                });
-
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { decrement: item.quantity } }
-                });
-            } else {
-                // Non-product item (service etc) - just create
-                await tx.saleItem.create({
-                    data: {
-                        saleId: sale.id,
-                        productId: null,
-                        productName: item.productName,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        lineTotal: item.quantity * item.unitPrice,
-                        listUnitPrice: item.listUnitPrice || item.unitPrice,
-                        appliedDiscountRate: item.appliedDiscountRate || 0
-                    }
-                });
+                const product = productMap.get(item.productId);
+                productName = item.productName || product?.name;
             }
+
+            return {
+                saleId: sale.id,
+                productId: item.productId || null,
+                productName: productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                lineTotal: item.quantity * item.unitPrice,
+                listUnitPrice: item.listUnitPrice || item.unitPrice,
+                appliedDiscountRate: item.appliedDiscountRate || 0
+            };
+        });
+
+        await tx.saleItem.createMany({
+            data: saleItemsData
+        });
+
+        // C. Update Stock (Parallel Optimized)
+        // We use the aggregated quantities to perform exactly one update per product
+        const updatePromises = [];
+        for (const [pid, qty] of Array.from(productQuantities)) {
+            updatePromises.push(
+                tx.product.update({
+                    where: { id: pid },
+                    data: { stock: { decrement: qty } }
+                })
+            );
         }
+
+        await Promise.all(updatePromises);
+
+    }, {
+        timeout: 10000 // Increased timeout to 10s to handle larger batches
     });
 
     revalidatePath("/sales");
@@ -402,65 +436,103 @@ export async function updateSale(saleId: string, data: { items: any[] }) {
     // Calculate new total
     const totalAmount = data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
 
+    // 1. Fetch Existing Items (Pre-transaction)
+    const existingItems = await prisma.saleItem.findMany({
+        where: { saleId }
+    });
+
+    // 2. Prepare Product Map & Net Stock Changes
+    const productIds = new Set<string>();
+    const stockChanges = new Map<string, number>();
+
+    // Process Existing Items (Revert Stock -> Increment)
+    for (const item of existingItems) {
+        if (item.productId) {
+            productIds.add(item.productId);
+            const currentChange = stockChanges.get(item.productId) || 0;
+            stockChanges.set(item.productId, currentChange + item.quantity);
+        }
+    }
+
+    // Process New Items (Deduct Stock -> Decrement)
+    for (const item of data.items) {
+        if (item.productId) {
+            productIds.add(item.productId);
+            const currentChange = stockChanges.get(item.productId) || 0;
+            stockChanges.set(item.productId, currentChange - item.quantity);
+        }
+    }
+
+    // 3. Fetch Products
+    const uniqueProductIds = Array.from(productIds);
+    const products = await prisma.product.findMany({
+        where: { id: { in: uniqueProductIds }, companyId: user.companyId }
+    });
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    // 4. Validate Stock (Predicted)
+    // We iterate over the net changes. If a change is negative, we must ensure stock is sufficient.
+    for (const [pid, change] of Array.from(stockChanges)) {
+        if (change < 0) { // Net stock reduction
+            const product = productMap.get(pid);
+            if (!product) throw new Error(`Product ${pid} not found (during update check)`);
+
+            // Check if current stock + change (which is negative) >= 0
+            if (product.stock + change < 0) {
+                throw new Error(`Stok yetersiz: ${product.name} (Mevcut: ${product.stock}, Değişim: ${change}, Yeni Bakiye: ${product.stock + change})`);
+            }
+        }
+    }
+
+    // 5. Transaction: Delete Old -> Create New -> Update Stock -> Update Sale
     await prisma.$transaction(async (tx) => {
-        // 1. Get existing sale items to revert stock
-        const existingItems = await tx.saleItem.findMany({
-            where: { saleId }
+        // A. Delete Old Items
+        await tx.saleItem.deleteMany({ where: { saleId } });
+
+        // B. Create New Items
+        const newItemsData = data.items.map(item => {
+            let productName = item.productName;
+            if (item.productId && !productName) {
+                productName = productMap.get(item.productId)?.name || "Unknown Product";
+            }
+            return {
+                saleId: saleId,
+                productId: item.productId || null,
+                productName: productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                lineTotal: item.quantity * item.unitPrice,
+                // Include these if they exist in data.items, otherwise default
+                listUnitPrice: item.listUnitPrice || item.unitPrice,
+                appliedDiscountRate: item.appliedDiscountRate || 0
+            };
         });
 
-        // 2. Revert stock for existing items
-        for (const item of existingItems) {
-            if (item.productId) {
-                // Ensure product still exists/owned
-                const product = await tx.product.findFirst({ where: { id: item.productId, companyId: user.companyId } });
-                if (product) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } }
-                    });
-                }
-            }
+        if (newItemsData.length > 0) {
+            await tx.saleItem.createMany({ data: newItemsData });
         }
 
-        // 3. Delete existing items
-        await tx.saleItem.deleteMany({
-            where: { saleId }
-        });
-
-        // 4. Create new items & Deduct stock
-        for (const item of data.items) {
-            await tx.saleItem.create({
-                data: {
-                    saleId: saleId,
-                    productId: item.productId || null,
-                    productName: item.productName,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    lineTotal: item.quantity * item.unitPrice
-                }
-            });
-
-            if (item.productId) {
-                const product = await tx.product.findFirst({ where: { id: item.productId, companyId: user.companyId } });
-                if (!product) throw new Error(`Product ${item.productId} not found`);
-
-                if (product.stock < item.quantity) {
-                    throw new Error(`Stok yetersiz: ${product.name} (Stok: ${product.stock}, İstenen: ${item.quantity})`);
-                }
-
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { decrement: item.quantity } }
-                });
+        // C. Update Stock (Parallel Optimized)
+        const updatePromises = [];
+        for (const [pid, change] of Array.from(stockChanges)) {
+            if (change !== 0) {
+                updatePromises.push(
+                    tx.product.update({
+                        where: { id: pid },
+                        data: { stock: { increment: change } }
+                    })
+                );
             }
         }
+        await Promise.all(updatePromises);
 
-        // 5. Update Sale Total
+        // D. Update Sale
         await tx.sale.update({
             where: { id: saleId },
             data: { totalAmount }
         });
-    });
+
+    }, { timeout: 10000 });
 
     revalidatePath("/sales");
     revalidatePath("/customers");

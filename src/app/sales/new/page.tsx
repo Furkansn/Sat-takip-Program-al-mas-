@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSale, getProducts } from "@/actions/transaction";
-import { getCustomers } from "@/actions/customer";
+import { getCustomers, getAllActiveCustomers } from "@/actions/customer";
 import Link from "next/link";
 
 
@@ -184,10 +184,19 @@ export default function NewSalePage() {
     if (segment === 'gold') discountRate = 0.10;
     else if (segment === 'silver') discountRate = 0.05;
 
+    // Calculate Balance
+    let customerBalance = 0;
+    if (selectedCustomer) {
+        const totalSales = selectedCustomer.sales?.reduce((acc: number, s: any) => acc + s.totalAmount, 0) || 0;
+        const totalColl = selectedCustomer.collections?.reduce((acc: number, c: any) => acc + c.amount, 0) || 0;
+        const totalReturns = selectedCustomer.returns?.reduce((acc: number, r: any) => acc + r.totalAmount, 0) || 0;
+        customerBalance = totalSales - (totalColl + totalReturns);
+    }
+
     // Fetch initial data
     useEffect(() => {
         getProducts().then(data => setProductList(data.products));
-        getCustomers().then(data => setCustomerList(data.customers));
+        getAllActiveCustomers().then(data => setCustomerList(data));
     }, []);
 
     const handleProductChange = (index: number, productId: string) => {
@@ -243,6 +252,8 @@ export default function NewSalePage() {
     };
 
     const handleSubmit = async () => {
+        if (loading) return;
+
         if (!selectedCustomerId) {
             alert("Lütfen müşteri seçin.");
             return;
@@ -285,6 +296,7 @@ export default function NewSalePage() {
 
     return (
         <main className="container" style={{ maxWidth: '1200px' }}>
+            {/* ... styles ... */}
             <style jsx>{`
                 .sale-grid {
                     display: grid;
@@ -326,7 +338,18 @@ export default function NewSalePage() {
 
             <div className="card">
                 <div style={{ marginBottom: '1.5rem', background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Müşteri</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label style={{ fontWeight: 600 }}>Müşteri</label>
+                        {selectedCustomer && (
+                            <span style={{
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: customerBalance > 0 ? '#ef4444' : '#16a34a'
+                            }}>
+                                Bakiye: ${Math.abs(customerBalance).toLocaleString('en-US')} {customerBalance > 0 ? '(Borç)' : customerBalance < 0 ? '(Alacak)' : ''}
+                            </span>
+                        )}
+                    </div>
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                         <select
                             className="select"
@@ -351,6 +374,22 @@ export default function NewSalePage() {
                             </div>
                         )}
                     </div>
+                    {/* Risk Warning */}
+                    {selectedCustomer && selectedCustomer.riskLimit > 0 && (
+                        <>
+                            {customerBalance >= selectedCustomer.riskLimit ? (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(239, 68, 68, 0.1)', padding: '0.4rem 0.8rem', borderRadius: '6px', width: 'fit-content' }}>
+                                    <span>🛑</span>
+                                    <span><strong>Limit Aşıldı!</strong> Mevcut borç risk limitini (${selectedCustomer.riskLimit.toLocaleString()}) aştı.</span>
+                                </div>
+                            ) : (customerBalance / selectedCustomer.riskLimit) >= 0.8 ? (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(245, 158, 11, 0.1)', padding: '0.4rem 0.8rem', borderRadius: '6px', width: 'fit-content' }}>
+                                    <span>⚠️</span>
+                                    <span><strong>Dikkat:</strong> Risk limitine (%{((customerBalance / selectedCustomer.riskLimit) * 100).toFixed(0)}) yaklaşıldı. Limit: ${selectedCustomer.riskLimit.toLocaleString()}</span>
+                                </div>
+                            ) : null}
+                        </>
+                    )}
                 </div>
 
                 <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Ürünler</h3>
@@ -433,23 +472,21 @@ export default function NewSalePage() {
                                         }}
                                         style={{ textAlign: 'right', height: '42px', width: '100%' }}
                                     />
-                                    {/* Cost Warning Badge */}
-                                    {product && product.cost > 0 && (product.price * (1 - discountRate)) < product.cost && (
+                                    {/* Valid Price Warning Badge */}
+                                    {product && product.cost > 0 && (
                                         <div style={{
                                             fontSize: '0.7rem',
-                                            color: '#854d0e', // Dark yellow/brown
-                                            background: '#fef9c3', // Light yellow
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            marginTop: '4px',
+                                            color: Number(item.unitPrice) < product.cost ? '#ef4444' : 'var(--color-neutral)',
+                                            padding: '2px 0',
+                                            textAlign: 'right',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'flex-end',
-                                            fontWeight: 600,
-                                            border: '1px solid #fde047'
+                                            gap: '4px',
+                                            opacity: 0.8
                                         }}>
-                                            <span style={{ marginRight: '4px' }}>⚠️</span>
-                                            min tutar: ${product.cost}
+                                            {Number(item.unitPrice) < product.cost && <span>⚠️</span>}
+                                            <span>Min: ${product.cost.toLocaleString()}</span>
                                         </div>
                                     )}
 
@@ -523,8 +560,9 @@ export default function NewSalePage() {
                             className="btn btn-primary"
                             onClick={handleSubmit}
                             disabled={loading}
-                            style={{ padding: '1rem 3rem', fontSize: '1.2rem' }}
+                            style={{ padding: '1rem 3rem', fontSize: '1.2rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                         >
+                            {loading && <span className="spinner"></span>}
                             {loading ? "Kaydediliyor..." : "Satışı Tamamla ✓"}
                         </button>
                     </div>

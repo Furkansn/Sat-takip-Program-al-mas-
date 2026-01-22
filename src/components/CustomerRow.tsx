@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function CustomerRow({ customer }: { customer: any }) {
     const router = useRouter();
+    const [isLoading, setIsLoading] = useState(false);
 
     const totalSales = customer.sales.reduce((sum: number, s: any) => sum + s.totalAmount, 0);
     const totalColl = customer.collections.reduce((sum: number, col: any) => sum + col.amount, 0);
@@ -14,7 +16,9 @@ export default function CustomerRow({ customer }: { customer: any }) {
 
     let statusBadge = <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)' }}>Normal</span>;
 
-    if (limit > 0) {
+    if (!customer.isActive) {
+        statusBadge = <span className="badge" style={{ background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8', border: '1px solid rgba(100, 116, 139, 0.3)' }}>PASİF</span>;
+    } else if (limit > 0) {
         if (balance >= limit) {
             statusBadge = <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}>Limit Aşıldı</span>;
         } else if (usageRatio >= 0.8) {
@@ -32,15 +36,31 @@ export default function CustomerRow({ customer }: { customer: any }) {
         segmentBadge = <span className="badge" title="İndirim Yok" style={{ background: 'rgba(180, 83, 9, 0.2)', color: '#b45309', border: '1px solid rgba(180, 83, 9, 0.3)', marginLeft: '0.5rem', fontSize: '0.65rem' }}>BRONZE</span>;
     }
 
+    const handleClick = () => {
+        if (isLoading) return;
+        setIsLoading(true);
+        router.push(`/customers/${customer.id}`);
+    };
+
     return (
         <tr
-            onClick={() => router.push(`/customers/${customer.id}`)}
-            style={{ cursor: 'pointer', transition: 'background-color 0.2s' }}
+            onClick={handleClick}
+            style={{
+                cursor: isLoading ? 'wait' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: isLoading ? 0.7 : (customer.isActive ? 1 : 0.6),
+                backgroundColor: isLoading ? 'var(--surface-hover)' : (!customer.isActive ? 'rgba(0,0,0,0.02)' : undefined),
+                position: 'relative',
+                transform: isLoading ? 'scale(0.995)' : 'none'
+            }}
             className="hover:bg-white/5"
         >
             <td data-label="Müşteri">
-                <span style={{ fontWeight: 500 }}>{customer.name} {customer.surname}</span>
-                {segmentBadge}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {isLoading && <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></span>}
+                    <span style={{ fontWeight: 500 }}>{customer.name} {customer.surname}</span>
+                    {segmentBadge}
+                </div>
             </td>
             <td data-label="Telefon">{customer.phone || '-'}</td>
             <td data-label="İl">{customer.city ? customer.city.toLocaleUpperCase('tr-TR') : '-'}</td>

@@ -10,6 +10,8 @@ export default function ProductsClient({ products }: { products: any[] }) {
     const [showStockModal, setShowStockModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<any>(null);
 
+    const [loading, setLoading] = useState(false);
+
     // View Modal State
     const [viewingProduct, setViewingProduct] = useState<any>(null);
 
@@ -34,19 +36,31 @@ export default function ProductsClient({ products }: { products: any[] }) {
         setSelectedProductGroup("Ekran");
     };
 
-    async function handleSaveProduct(formData: FormData) {
+    async function handleSaveProduct(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (loading) return;
+
+        setLoading(true);
+        const formData = new FormData(e.currentTarget);
+
         // Append image data if available
         if (imagePreview) {
             formData.set("imageUrl", imagePreview);
         }
 
-        if (editingProduct) {
-            await updateProduct(editingProduct.id, formData);
-        } else {
-            await createProduct(formData);
+        try {
+            if (editingProduct) {
+                await updateProduct(editingProduct.id, formData);
+            } else {
+                await createProduct(formData);
+            }
+            closeProductModal();
+            router.refresh();
+        } catch (error: any) {
+            alert("Hata: " + error.message);
+        } finally {
+            setLoading(false);
         }
-        closeProductModal();
-        router.refresh();
     }
 
     async function handleDeleteProduct(id: string) {
@@ -61,13 +75,23 @@ export default function ProductsClient({ products }: { products: any[] }) {
         }
     }
 
-    async function handleAddStock(formData: FormData) {
+    async function handleAddStock(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (loading) return;
+        setLoading(true);
+        const formData = new FormData(e.currentTarget);
         const productId = formData.get("productId") as string;
         const quantity = Number(formData.get("quantity"));
 
-        await updateStock(productId, quantity);
-        setShowStockModal(false);
-        router.refresh();
+        try {
+            await updateStock(productId, quantity);
+            setShowStockModal(false);
+            router.refresh();
+        } catch (error: any) {
+            alert("Hata: " + error.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
     function openEditModal(product: any, e?: React.MouseEvent) {
@@ -290,7 +314,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={handleSaveProduct} className="card"
+                    <form onSubmit={handleSaveProduct} className="card"
                         style={{
                             width: '90%',
                             maxWidth: '800px',
@@ -496,8 +520,11 @@ export default function ProductsClient({ products }: { products: any[] }) {
                             bottom: 0,
                             zIndex: 10
                         }}>
-                            <button type="button" className="btn btn-secondary" onClick={closeProductModal}>İptal</button>
-                            <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }}>Kaydet</button>
+                            <button type="button" className="btn btn-secondary" onClick={closeProductModal} disabled={loading}>İptal</button>
+                            <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }} disabled={loading}>
+                                {loading && <span className="spinner"></span>}
+                                {loading ? "Kaydediliyor..." : "Kaydet"}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -509,7 +536,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={handleAddStock} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
+                    <form onSubmit={handleAddStock} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
                         <h3>Stok Ekle</h3>
                         <div style={{ marginBottom: '1rem' }}>
                             <label>Ürün Seç</label>
@@ -525,8 +552,11 @@ export default function ProductsClient({ products }: { products: any[] }) {
                             <input name="quantity" type="number" step="1" required className="input" />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                            <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>İptal</button>
-                            <button type="submit" className="btn btn-primary">Kaydet</button>
+                            <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)} disabled={loading}>İptal</button>
+                            <button type="submit" className="btn btn-primary" disabled={loading}>
+                                {loading && <span className="spinner"></span>}
+                                {loading ? "Kaydediliyor..." : "Kaydet"}
+                            </button>
                         </div>
                     </form>
                 </div>

@@ -2,8 +2,38 @@
 
 import { createCustomer } from "@/actions/customer";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function NewCustomerPage() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (loading) return;
+
+        setLoading(true);
+        const formData = new FormData(event.currentTarget);
+
+        try {
+            await createCustomer(formData);
+            // Router automatic redirection might happen in server action, 
+            // but if we preventDefault, we might need to handle navigation unless createCustomer does redirect properly.
+            // Usually createCustomer server action with 'use server' might redirect. 
+            // If it returns, we can assume success or handle response.
+            // Assuming createCustomer redirects on success or we need to redirect.
+            // Existing code didn't have redirect logic here, it was `action={createCustomer}`. 
+            // Standard server actions with `redirect()` inside work fine with `action={}`.
+            // When calling programmatically, `redirect()` inside server action throws NEXT_REDIRECT error which is caught by Next.js.
+            // So we should be fine just awaiting it.
+        } catch (error) {
+            console.error(error);
+            // If error is not a redirect
+            setLoading(false);
+        }
+    }
+
     return (
         <main className="container" style={{ maxWidth: '600px' }}>
             <div style={{ marginBottom: '1.5rem' }}>
@@ -13,7 +43,7 @@ export default function NewCustomerPage() {
                 <h1>Yeni Müşteri</h1>
             </div>
 
-            <form action={createCustomer} className="card">
+            <form onSubmit={handleSubmit} className="card">
                 <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem' }}>Ad</label>
                     <input name="name" required className="input" placeholder="Örn: Ali" />
@@ -53,7 +83,15 @@ export default function NewCustomerPage() {
                     </select>
                 </div>
 
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Kaydet</button>
+                <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    disabled={loading}
+                >
+                    {loading && <span className="spinner"></span>}
+                    {loading ? "Kaydediliyor..." : "Kaydet"}
+                </button>
             </form>
         </main>
     );

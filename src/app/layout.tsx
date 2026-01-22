@@ -22,6 +22,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 
 import { Providers } from "@/components/Providers";
 import { auth } from "@/lib/auth"; // Correct import path for V5
+import NextTopLoader from "nextjs-toploader";
 
 export default async function RootLayout({
     children,
@@ -37,6 +38,17 @@ export default async function RootLayout({
     return (
         <html lang="tr">
             <body className={inter.className}>
+                <NextTopLoader
+                    color="#2563eb"
+                    initialPosition={0.08}
+                    crawlSpeed={200}
+                    height={3}
+                    crawl={true}
+                    showSpinner={false}
+                    easing="ease"
+                    speed={200}
+                    shadow="0 0 10px #2563eb,0 0 5px #2563eb"
+                />
                 <Providers session={session}>
                     <ThemeProvider>
                         <Navbar initialTenantId={adminTenantId} />

@@ -9,6 +9,51 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const CustomerStatusToggle = ({ defaultActive }: { defaultActive: boolean }) => {
+    const [isActive, setIsActive] = useState(defaultActive);
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: isActive ? '#22c55e' : '#94a3b8', minWidth: '40px', textAlign: 'right' }}>
+                {isActive ? 'AKTİF' : 'PASİF'}
+            </span>
+            <div
+                onClick={() => setIsActive(!isActive)}
+                style={{
+                    width: '50px',
+                    height: '26px',
+                    background: isActive ? '#22c55e' : '#cbd5e1',
+                    borderRadius: '13px',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s ease',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+                }}
+            >
+                <div style={{
+                    width: '22px',
+                    height: '22px',
+                    background: 'white',
+                    borderRadius: '50%',
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    transform: isActive ? 'translateX(24px)' : 'translateX(0)',
+                    transition: 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }} />
+            </div>
+            <input
+                type="checkbox"
+                name="isActive"
+                checked={isActive}
+                readOnly
+                style={{ display: 'none' }}
+            />
+        </div>
+    );
+};
+
 export default function CustomerDetailView({ customer }: { customer: any }) {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'sales' | 'collections' | 'returns'>('sales');
@@ -576,18 +621,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                 halign: 'right'
             },
             didDrawPage: (data) => {
-                // Footer Logo "ST"
-                const pageSize = doc.internal.pageSize;
-                const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
-                const pageWidth = pageSize.width ? pageSize.width : pageSize.getWidth();
-
-                doc.setFillColor(41, 128, 185);
-                doc.circle(pageWidth - 20, pageHeight - 20, 8, 'F');
-                doc.setTextColor(255);
-                doc.setFontSize(10);
-                doc.setFont('helvetica', 'bold'); // ST logo is simple, helvetica fits
-                doc.text("ST", pageWidth - 20, pageHeight - 17, { align: 'center', baseline: 'middle' });
-                doc.setFont('Roboto', 'normal'); // Switch back
+                // Footer removed as per request
             }
         });
 
@@ -633,15 +667,29 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         }
     };
 
-    async function onAddCollection(formData: FormData) {
+    async function onAddCollection(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (loading) return;
+        setLoading(true);
+        const formData = new FormData(e.currentTarget);
         const amount = Number(formData.get("amount"));
         const note = formData.get("note") as string;
-        await addCollection(customer.id, amount, note);
-        setShowCollectionModal(false);
-        router.refresh();
+        try {
+            await addCollection(customer.id, amount, note);
+            setShowCollectionModal(false);
+            router.refresh();
+        } catch (error: any) {
+            alert("Hata: " + error.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
-    async function onUpdateCustomer(formData: FormData) {
+    async function onUpdateCustomer(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (loading) return;
+        setLoading(true);
+        const formData = new FormData(e.currentTarget);
         const name = formData.get("name") as string;
         const surname = formData.get("surname") as string;
         const phone = formData.get("phone") as string;
@@ -650,10 +698,17 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         const taxId = formData.get("taxId") as string;
         const riskLimit = Number(formData.get("riskLimit"));
         const segment = formData.get("segment") as string;
+        const isActive = formData.get("isActive") === "on";
 
-        await updateCustomer(customer.id, { name, surname, phone, address, city, taxId, riskLimit, segment });
-        setShowEditModal(false);
-        router.refresh(); // Important to reflect Name changes in header
+        try {
+            await updateCustomer(customer.id, { name, surname, phone, address, city, taxId, riskLimit, segment, isActive });
+            setShowEditModal(false);
+            router.refresh();
+        } catch (error: any) {
+            alert("Hata: " + error.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
     return (
@@ -665,6 +720,9 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                             <h2 style={{ margin: 0, fontSize: '2rem' }}>{customer.name} {customer.surname}</h2>
+                            {!customer.isActive && (
+                                <span className="badge" style={{ background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8', border: '1px solid rgba(100, 116, 139, 0.3)', fontSize: '0.9rem', marginLeft: '0.5rem' }}>PASİF</span>
+                            )}
                             {segmentBadge}
                             <button
                                 onClick={() => setShowEditModal(true)}
@@ -896,7 +954,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={onAddCollection} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
+                    <form onSubmit={onAddCollection} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
                         <h3>Tahsilat Ekle</h3>
                         <div style={{ marginBottom: '1rem' }}>
                             <label>Tutar ($)</label>
@@ -907,8 +965,10 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                             <input name="note" className="input" />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                            <button type="button" className="btn btn-secondary" onClick={() => setShowCollectionModal(false)}>İptal</button>
-                            <button type="submit" className="btn btn-primary">Kaydet</button>
+                            <button type="button" className="btn btn-secondary" onClick={() => setShowCollectionModal(false)} disabled={loading}>İptal</button>
+                            <button type="submit" className="btn btn-primary" disabled={loading}>
+                                {loading ? "Kaydediliyor..." : "Kaydet"}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -1011,6 +1071,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                     onClick={onSaveReturn}
                                     disabled={loading}
                                 >
+                                    {loading && <span className="spinner"></span>}
                                     {loading ? "Kaydediliyor..." : "İadeyi Gir"}
                                 </button>
                             </div>
@@ -1081,7 +1142,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form action={onUpdateCustomer} className="card" style={{
+                    <form onSubmit={onUpdateCustomer} className="card" style={{
                         width: '90%',
                         maxWidth: '500px',
                         margin: 0,
@@ -1132,9 +1193,19 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                             </small>
                         </div>
 
+                        <div style={{ marginBottom: '1.5rem', background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontWeight: 600, display: 'block' }}>Müşteri Durumu</label>
+                                <CustomerStatusToggle defaultActive={customer.isActive} />
+                            </div>
+                            <small style={{ color: 'var(--color-neutral)' }}>Pasif müşteriler listelerde varsayılan olarak gizlenir ancak raporlarda görünmeye devam eder.</small>
+                        </div>
+
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                            <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>İptal</button>
-                            <button type="submit" className="btn btn-primary">Güncelle</button>
+                            <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)} disabled={loading}>İptal</button>
+                            <button type="submit" className="btn btn-primary" disabled={loading}>
+                                {loading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -1253,6 +1324,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                     onClick={onSaveSale}
                                     disabled={loading}
                                 >
+                                    {loading && <span className="spinner"></span>}
                                     {loading ? "Kaydediliyor..." : "Kaydet"}
                                 </button>
                             </div>
