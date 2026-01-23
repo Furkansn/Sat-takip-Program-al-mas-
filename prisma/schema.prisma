@@ -139,6 +139,7 @@ model Sale {
   // Snapshot fields for segmentation
   segmentAtTime String @default("bronze")
   discountRateAtTime Float @default(0)
+  status      String   @default("completed") // completed, cancelled
 
   items       SaleItem[]
   

@@ -1,9 +1,10 @@
 import { getCurrentCompany } from "@/actions/company";
-import { getReportsSummary, getMonthlyTransactions, getCustomerBalances, getTopProducts } from "@/actions/reports";
 import ReportsFilter from "@/components/ReportsFilter";
 import TransactionsSection from "@/components/reports/TransactionsSection";
 import BalanceSection from "@/components/reports/BalanceSection";
 import ProductAnalysisSection from "@/components/reports/ProductAnalysisSection";
+import ReturnsAnalysisSection from "@/components/reports/ReturnsAnalysisSection";
+import { getReportsSummary, getMonthlyTransactions, getCustomerBalances, getTopProducts, getCustomersWithReturns } from "@/actions/reports";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -38,6 +39,7 @@ export default async function ReportsPage({
     const transactions = await getMonthlyTransactions(searchParams.month);
     const balances = await getCustomerBalances();
     const topProducts = await getTopProducts(searchParams.month);
+    const customersWithReturns = await getCustomersWithReturns(searchParams.month);
 
     const activeMonth = searchParams.month || new Date().toISOString().slice(0, 7);
 
@@ -105,6 +107,7 @@ export default async function ReportsPage({
                 </div>
 
                 <TransactionsSection data={transactions} month={activeMonth} />
+                <ReturnsAnalysisSection data={customersWithReturns} month={activeMonth} />
                 <BalanceSection data={balances} month={activeMonth} />
                 <ProductAnalysisSection data={topProducts} month={activeMonth} />
             </div>

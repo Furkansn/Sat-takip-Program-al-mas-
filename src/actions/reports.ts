@@ -34,7 +34,11 @@ export async function getReportsSummary(monthStr?: string) {
     // Run parallel queries
     const [sales, collections, returns] = await Promise.all([
         prisma.sale.aggregate({
-            where: { companyId, date: { gte: start, lte: end } },
+            where: {
+                companyId,
+                date: { gte: start, lte: end },
+                status: { not: 'cancelled' }
+            },
             _sum: { totalAmount: true }
         }),
         prisma.collection.aggregate({
@@ -79,7 +83,11 @@ export async function getMonthlyTransactions(monthStr?: string) {
 
     const [sales, collections, returns] = await Promise.all([
         prisma.sale.findMany({
-            where: { companyId, date: { gte: start, lte: end } },
+            where: {
+                companyId,
+                date: { gte: start, lte: end },
+                status: { not: 'cancelled' }
+            },
             include: { customer: true, items: true },
             orderBy: { date: 'desc' }
         }),
@@ -116,7 +124,10 @@ export async function getCustomerBalances() {
     const customers = await prisma.customer.findMany({
         where: { companyId },
         include: {
-            sales: { select: { totalAmount: true } },
+            sales: {
+                where: { status: { not: 'cancelled' } },
+                select: { totalAmount: true }
+            },
             collections: { select: { amount: true } },
             returns: { select: { totalAmount: true } }
         }
@@ -153,7 +164,8 @@ export async function getTopProducts(monthStr?: string) {
         where: {
             sale: {
                 companyId,
-                date: { gte: start, lte: end }
+                date: { gte: start, lte: end },
+                status: { not: 'cancelled' }
             }
         },
         include: {
@@ -197,4 +209,43 @@ export async function getTopProducts(monthStr?: string) {
     })).sort((a, b) => b.revenue - a.revenue); // Sort by revenue
 
     return result;
+}
+
+export async function getCustomersWithReturns(monthStr?: string) {
+    const companyId = await checkPermission();
+    if (!companyId) throw new Error("Unauthorized");
+
+    const { start, end } = getMonthRange(monthStr);
+
+    const returns = await prisma.return.findMany({
+        where: {
+            companyId,
+            date: { gte: start, lte: end }
+        },
+        include: {
+            customer: true
+        }
+    });
+
+    // Aggregate by customer
+    const customerReturns = new Map<string, {
+        customer: { id: string, name: string, surname: string },
+        totalAmount: number,
+        count: number
+    }>();
+
+    for (const ret of returns) {
+        const existing = customerReturns.get(ret.customerId) || {
+            customer: { id: ret.customer.id, name: ret.customer.name, surname: ret.customer.surname },
+            totalAmount: 0,
+            count: 0
+        };
+
+        existing.totalAmount += ret.totalAmount;
+        existing.count += 1;
+        customerReturns.set(ret.customerId, existing);
+    }
+
+    return Array.from(customerReturns.values())
+        .sort((a, b) => b.totalAmount - a.totalAmount);
 }

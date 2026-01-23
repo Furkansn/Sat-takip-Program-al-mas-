@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function CustomerRow({ customer }: { customer: any }) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const prefetched = useRef(false);
 
     const totalSales = customer.sales.reduce((sum: number, s: any) => sum + s.totalAmount, 0);
     const totalColl = customer.collections.reduce((sum: number, col: any) => sum + col.amount, 0);
@@ -36,15 +37,27 @@ export default function CustomerRow({ customer }: { customer: any }) {
         segmentBadge = <span className="badge" title="İndirim Yok" style={{ background: 'rgba(180, 83, 9, 0.2)', color: '#b45309', border: '1px solid rgba(180, 83, 9, 0.3)', marginLeft: '0.5rem', fontSize: '0.65rem' }}>BRONZE</span>;
     }
 
+    const targetUrl = `/customers/${customer.id}`;
+
+    const handlePrefetch = () => {
+        if (!prefetched.current) {
+            router.prefetch(targetUrl);
+            prefetched.current = true;
+        }
+    };
+
     const handleClick = () => {
         if (isLoading) return;
         setIsLoading(true);
-        router.push(`/customers/${customer.id}`);
+        router.push(targetUrl);
     };
 
     return (
         <tr
             onClick={handleClick}
+            onMouseEnter={handlePrefetch}
+            onTouchStart={handlePrefetch}
+            onPointerDown={handlePrefetch}
             style={{
                 cursor: isLoading ? 'wait' : 'pointer',
                 transition: 'all 0.2s',

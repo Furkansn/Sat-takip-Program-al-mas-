@@ -199,6 +199,30 @@ export default function NewSalePage() {
         getAllActiveCustomers().then(data => setCustomerList(data));
     }, []);
 
+    // Recalculate prices when discount rate (customer segment) changes
+    useEffect(() => {
+        setItems(prevItems => prevItems.map(item => {
+            if (!item.productId) return item;
+
+            const product = productList.find(p => p.id === item.productId);
+            if (!product) return item;
+
+            const listPrice = item.listUnitPrice || product.price;
+            const calculatedPrice = listPrice * (1 - discountRate);
+
+            // Safe Price Check (Cost Rule)
+            const safePrice = (product.cost && product.cost > 0)
+                ? Math.max(calculatedPrice, product.cost)
+                : calculatedPrice;
+
+            return {
+                ...item,
+                unitPrice: safePrice,
+                appliedDiscountRate: discountRate
+            };
+        }));
+    }, [discountRate, productList]);
+
     const handleProductChange = (index: number, productId: string) => {
         const product = productList.find(p => p.id === productId);
         const newItems = [...items];
@@ -473,10 +497,10 @@ export default function NewSalePage() {
                                         style={{ textAlign: 'right', height: '42px', width: '100%' }}
                                     />
                                     {/* Valid Price Warning Badge */}
-                                    {product && product.cost > 0 && (
+                                    {product && product.cost > 0 && Number(item.unitPrice) < product.cost && (
                                         <div style={{
                                             fontSize: '0.7rem',
-                                            color: Number(item.unitPrice) < product.cost ? '#ef4444' : 'var(--color-neutral)',
+                                            color: '#ef4444',
                                             padding: '2px 0',
                                             textAlign: 'right',
                                             display: 'flex',
@@ -485,7 +509,7 @@ export default function NewSalePage() {
                                             gap: '4px',
                                             opacity: 0.8
                                         }}>
-                                            {Number(item.unitPrice) < product.cost && <span>⚠️</span>}
+                                            <span>⚠️</span>
                                             <span>Min: ${product.cost.toLocaleString()}</span>
                                         </div>
                                     )}

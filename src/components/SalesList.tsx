@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { updateSale, getProducts } from "@/actions/transaction";
+import { updateSale, getProducts, cancelSale } from "@/actions/transaction";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -21,6 +21,10 @@ export default function SalesList({ sales }: { sales: any[] }) {
     }, [editingSale]);
 
     const openEditModal = (sale: any) => {
+        if (sale.status === 'cancelled') {
+            alert("İptal edilen satışlar düzenlenemez.");
+            return;
+        }
         setEditingSale(sale);
         setEditFormItems(sale.items.map((i: any) => ({ ...i, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice) })));
     };
@@ -91,31 +95,41 @@ export default function SalesList({ sales }: { sales: any[] }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {sales.map(sale => (
-                        <tr
-                            key={sale.id}
-                            onClick={(e) => {
-                                if ((e.target as HTMLElement).closest('a')) return;
-                                openEditModal(sale);
-                            }}
-                            style={{ cursor: 'pointer' }}
-                            className="hover:bg-white/5"
-                        >
-                            <td data-label="Tarih" suppressHydrationWarning>{new Date(sale.date).toLocaleDateString('tr-TR')} {new Date(sale.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</td>
-                            <td data-label="Müşteri">
-                                <Link href={`/customers/${sale.customerId}`} style={{ color: 'inherit', fontWeight: 500 }} onClick={(e) => e.stopPropagation()}>
-                                    {sale.customer.name} {sale.customer.surname}
-                                </Link>
-                            </td>
-                            <td data-label="Kapsam" style={{ color: 'var(--color-neutral)', fontSize: '0.9rem' }}>
-                                {sale.items.slice(0, 2).map((i: any) => i.productName).join(', ')}
-                                {sale.items.length > 2 && ` ve ${sale.items.length - 2} diğer`}
-                            </td>
-                            <td data-label="Toplam" style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                ${sale.totalAmount.toLocaleString('en-US')}
-                            </td>
-                        </tr>
-                    ))}
+                    {sales.map(sale => {
+                        const isCancelled = sale.status === 'cancelled';
+                        return (
+                            <tr
+                                key={sale.id}
+                                onClick={(e) => {
+                                    if ((e.target as HTMLElement).closest('a')) return;
+                                    openEditModal(sale);
+                                }}
+                                style={{
+                                    cursor: isCancelled ? 'not-allowed' : 'pointer',
+                                    opacity: isCancelled ? 0.6 : 1,
+                                    background: isCancelled ? 'rgba(239, 68, 68, 0.05)' : undefined
+                                }}
+                                className="hover:bg-white/5"
+                            >
+                                <td data-label="Tarih" suppressHydrationWarning style={{ textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                                    {new Date(sale.date).toLocaleDateString('tr-TR')} {new Date(sale.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                                    {isCancelled && <span style={{ marginLeft: '8px', fontSize: '0.8em', color: '#ef4444', fontWeight: 'bold', textDecoration: 'none', display: 'inline-block' }}>(İPTAL)</span>}
+                                </td>
+                                <td data-label="Müşteri">
+                                    <Link href={`/customers/${sale.customerId}`} style={{ color: 'inherit', fontWeight: 500, textDecoration: isCancelled ? 'line-through' : 'none' }} onClick={(e) => e.stopPropagation()}>
+                                        {sale.customer.name} {sale.customer.surname}
+                                    </Link>
+                                </td>
+                                <td data-label="Kapsam" style={{ color: 'var(--color-neutral)', fontSize: '0.9rem', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                                    {sale.items.slice(0, 2).map((i: any) => i.productName).join(', ')}
+                                    {sale.items.length > 2 && ` ve ${sale.items.length - 2} diğer`}
+                                </td>
+                                <td data-label="Toplam" style={{ textAlign: 'right', fontWeight: 'bold', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                                    ${sale.totalAmount.toLocaleString('en-US')}
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
 
@@ -214,14 +228,53 @@ export default function SalesList({ sales }: { sales: any[] }) {
                             <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
                                 Toplam: ${calculateEditTotal().toLocaleString('en-US')}
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={async () => {
+                                        if (confirm("Bu satışı İPTAL etmek istediğinize emin misiniz? Stoklar geri yüklenecek ve satış raporlardan kaldırılacak.")) {
+                                            try {
+                                                setLoading(true);
+                                                await cancelSale(editingSale.id);
+                                                setEditingSale(null);
+                                                router.refresh();
+                                            } catch (e: any) {
+                                                alert(e.message);
+                                                setLoading(false);
+                                            }
+                                        }
+                                    }}
+                                    disabled={loading}
+                                    style={{
+                                        padding: '0.5rem',
+                                        marginRight: 'auto',
+                                        color: '#ef4444',
+                                        background: 'rgba(239, 68, 68, 0.1)',
+                                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: 600
+                                    }}
+                                    title="Satışı İptal Et"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                                    </svg>
+                                    <span>İPTAL ET</span>
+                                </button>
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
                                     onClick={() => setEditingSale(null)}
                                     disabled={loading}
                                 >
-                                    İptal
+                                    Vazgeç
                                 </button>
                                 <button
                                     type="button"

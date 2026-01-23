@@ -37,7 +37,10 @@ export async function getCustomers(
         prisma.customer.findMany({
             where,
             include: {
-                sales: { select: { totalAmount: true } },
+                sales: {
+                    where: { status: { not: 'cancelled' } },
+                    select: { totalAmount: true }
+                },
                 collections: { select: { amount: true } },
                 returns: { select: { totalAmount: true } }
             },
@@ -63,7 +66,10 @@ export async function getAllActiveCustomers() {
             isActive: true
         },
         include: {
-            sales: { select: { totalAmount: true } },
+            sales: {
+                where: { status: { not: 'cancelled' } },
+                select: { totalAmount: true }
+            },
             collections: { select: { amount: true } },
             returns: { select: { totalAmount: true } }
         },
@@ -200,25 +206,57 @@ export async function addCollection(customerId: string, amount: number, note: st
 export async function getCustomerDetails(id: string) {
     const user = await getSessionUser();
 
-    // find first with companyId
-    const customer = await prisma.customer.findFirst({
-        where: { id, companyId: user.companyId },
-        include: {
-            sales: { orderBy: { date: 'desc' }, include: { items: true } },
-            collections: { orderBy: { date: 'desc' } },
-            returns: { orderBy: { date: 'desc' }, include: { items: true } },
-            company: true
-        }
-    });
+    // Parallelize queries for maximum speed
+    const [customer, saleStats, collectionStats, returnStats] = await Promise.all([
+        // 1. Fetch Customer + Recent Activities (Limit 500 for UI performance vs Data Completeness)
+        prisma.customer.findFirst({
+            where: { id, companyId: user.companyId },
+            include: {
+                sales: {
+                    orderBy: { date: 'desc' },
+                    take: 500,
+                    include: { items: true }
+                },
+                collections: {
+                    orderBy: { date: 'desc' },
+                    take: 500
+                },
+                returns: {
+                    orderBy: { date: 'desc' },
+                    take: 500,
+                    include: { items: true }
+                },
+                company: true
+            }
+        }),
+
+        // 2. Aggregate Sales (Total DB calculation for accuracy)
+        prisma.sale.aggregate({
+            where: { customerId: id, companyId: user.companyId, status: { not: 'cancelled' } },
+            _sum: { totalAmount: true }
+        }),
+
+        // 3. Aggregate Collections
+        prisma.collection.aggregate({
+            where: { customerId: id, companyId: user.companyId },
+            _sum: { amount: true }
+        }),
+
+        // 4. Aggregate Returns
+        prisma.return.aggregate({
+            where: { customerId: id, companyId: user.companyId },
+            _sum: { totalAmount: true }
+        })
+    ]);
 
     if (!customer) return null;
 
-    // Calculate Balance
-    const totalSales = customer.sales.reduce((acc, s) => acc + s.totalAmount, 0);
-    const totalCollections = customer.collections.reduce((acc, c) => acc + c.amount, 0);
-    const totalReturns = customer.returns.reduce((acc, r) => acc + r.totalAmount, 0);
+    // Use DB Aggregates for accurate balance
+    // Handle potential nulls safely
+    const totalSales = saleStats?._sum?.totalAmount ?? 0;
+    const totalCollections = collectionStats?._sum?.amount ?? 0;
+    const totalReturns = returnStats?._sum?.totalAmount ?? 0;
 
-    // Returns reduce the debt (balance), just like collections
     const balance = totalSales - (totalCollections + totalReturns);
 
     return { ...customer, balance };

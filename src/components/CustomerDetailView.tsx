@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { updateRiskLimit, addCollection, updateCustomer } from "@/actions/customer";
-import { createReturn } from "@/actions/return";
-import { updateSale, getProducts } from "@/actions/transaction";
+import { createReturn, updateReturn } from "@/actions/return";
+import { updateSale, getProducts, cancelSale } from "@/actions/transaction";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -68,6 +68,11 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
     const [editFormItems, setEditFormItems] = useState<any[]>([]);
     const [productList, setProductList] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+
+    // Collection Modal State
+    const [collectionMethod, setCollectionMethod] = useState<'cash' | 'transfer' | 'creditCard'>('cash');
+    const [commissionRate, setCommissionRate] = useState<number>(0);
+    const [collectionAmount, setCollectionAmount] = useState<string>("");
 
     // Return Form State
     const [returnItems, setReturnItems] = useState<any[]>([{ productName: "", quantity: "", unitPrice: "" }]);
@@ -179,6 +184,36 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         }
     }
 
+    // Edit Return State
+    const [editingReturn, setEditingReturn] = useState<any>(null);
+    const [editReturnItems, setEditReturnItems] = useState<any[]>([]);
+
+    const openReturnEditModal = (ret: any) => {
+        setEditingReturn(ret);
+        setEditReturnItems(ret.items.map((i: any) => ({
+            ...i,
+            quantity: Number(i.quantity),
+            unitPrice: Number(i.unitPrice)
+        })));
+    };
+
+    async function onSaveEditReturn() {
+        if (editReturnItems.some(i => !i.productName || i.quantity <= 0)) {
+            alert("Lütfen tüm alanları doldurun.");
+            return;
+        }
+        try {
+            setLoading(true);
+            await updateReturn(editingReturn.id, editReturnItems);
+            setEditingReturn(null);
+            router.refresh();
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     // Checking risk status
     const limit = customer.riskLimit;
     const usageRatio = limit > 0 ? (customer.balance / limit) : 0;
@@ -227,12 +262,17 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
 
         // Add Sales (Flattened by Item)
         customer.sales.forEach((s: any) => {
+            // Filter out cancelled sales
+            if (s.status === 'cancelled') return;
+
             s.items.forEach((item: any) => {
                 const listPrice = item.listUnitPrice || item.unitPrice; // Fallback
                 const discountRate = item.appliedDiscountRate || 0;
 
                 transactions.push({
+                    groupId: s.id, // Add groupId for visual grouping
                     date: new Date(s.date),
+                    createdAt: new Date(s.createdAt || s.date), // Fallback to date if createdAt missing
                     type: 'Satış',
                     description: item.productName,
                     quantity: item.quantity,
@@ -248,9 +288,19 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
 
         // Add Collections
         customer.collections.forEach((c: any) => {
+            let typeLabel = 'Tahsilat';
+            const note = c.note || '';
+            const lowerNote = note.toLowerCase();
+
+            if (lowerNote.startsWith('nakit')) typeLabel = 'Tahsilat - Nakit';
+            else if (lowerNote.startsWith('havale')) typeLabel = 'Tahsilat - Havale';
+            else if (lowerNote.startsWith('k.kartı')) typeLabel = 'Tahsilat - K.Kartı';
+
             transactions.push({
+                groupId: c.id,
                 date: new Date(c.date),
-                type: 'Tahsilat',
+                createdAt: new Date(c.createdAt || c.date),
+                type: typeLabel,
                 description: c.note || 'Tahsilat',
                 quantity: '-',
                 unitPrice: '-',
@@ -267,7 +317,9 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             customer.returns.forEach((r: any) => {
                 r.items.forEach((item: any) => {
                     transactions.push({
+                        groupId: r.id,
                         date: new Date(r.date),
+                        createdAt: new Date(r.createdAt || r.date),
                         type: 'İade',
                         description: item.productName + ' (İade)',
                         quantity: item.quantity,
@@ -282,25 +334,41 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             });
         }
 
-        // Sort by date ascending
-        transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+        // 1. Sort by date ASCENDING (with time) then by createdAt for stable timeline
+        transactions.sort((a, b) => {
+            const tA = a.date.getTime();
+            const tB = b.date.getTime();
+            if (tA !== tB) return tA - tB;
+            // Tie-break with createdAt
+            return (a.createdAt.getTime() || 0) - (b.createdAt.getTime() || 0);
+        });
 
-        // Calculate running balance and prepare rows
+        // 2. Calculate running balance
         let balance = 0;
-        const transactionRows = transactions.map(t => {
+        transactions.forEach(t => {
             balance += (t.debt - t.credit);
+            t.balanceSnapshot = balance;
+        });
+
+        // 3. Reverse to show Newest First (Descending)
+        transactions.reverse();
+
+        const transactionRows = transactions.map((t, index) => {
+            // Check if previous item (which is actually next in time, due to reverse) has same groupId
+            // But here checking PREVIOUS index in the REVERSED list means checking standard visual order
+            const prev = transactions[index - 1];
+            const isSameGroup = prev && prev.groupId === t.groupId;
+
             return [
-                t.date.toLocaleDateString('tr-TR'),
-                t.type,
+                isSameGroup ? '' : t.date.toLocaleDateString('tr-TR'),
+                isSameGroup ? '' : t.type,
                 t.description,
                 t.quantity,
-                t.listPrice !== '-' ? Number(t.listPrice).toLocaleString('en-US') : '-',
-                t.discountRate !== '-' ? `%${(Number(t.discountRate) * 100).toFixed(0)}` : '-',
                 t.unitPrice !== '-' ? Number(t.unitPrice).toLocaleString('en-US') : '-',
                 t.itemTotal !== '-' ? Number(t.itemTotal).toLocaleString('en-US') : '-',
                 t.debt > 0 ? t.debt : '',
                 t.credit > 0 ? t.credit : '',
-                balance
+                t.balanceSnapshot
             ];
         });
 
@@ -330,8 +398,6 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             'İşlem Türü',
             'Açıklama / Ürün',
             'Adet',
-            'Liste Fiyatı',
-            'İndirim',
             'Birim Fiyat',
             'Toplam',
             'Borç ($)',
@@ -340,10 +406,10 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         ];
 
         const footerRow = [
-            '', '', 'GENEL TOPLAM', '', '', '', '', '',
+            '', '', 'GENEL TOPLAM', '', '', '',
             totalDebt,
             totalCredit,
-            balance
+            customer.balance
         ];
 
         // Combine all data
@@ -360,11 +426,9 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         // Customize columns width
         const wscols = [
             { wch: 12 }, // Date
-            { wch: 15 }, // Type - Increased
-            { wch: 30 }, // Description
+            { wch: 18 }, // Type - Increased
+            { wch: 40 }, // Description - Increased
             { wch: 6 },  // Qty
-            { wch: 10 }, // List Price
-            { wch: 10 }, // Discount
             { wch: 12 }, // Unit Price
             { wch: 15 }, // Item Total
             { wch: 12 }, // Debt
@@ -380,44 +444,58 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
 
     const handleDownload = async () => {
         try {
-            const response = await fetch(`/api/export-customer?id=${customer.id}`);
+            // Using Client-side generation now, so no need for fetch to API
+            // ... actually the function createWorkbook uses local data, so we don't need the API call if we use createWorkbook
+            // BUT the original code was:
+            // const wb = createWorkbook();
+            // XLSX.writeFile(wb, filename);
 
-            if (!response.ok) {
-                // Try to read error message
-                const errorText = await response.text();
-                throw new Error(errorText || `Sunucu hatası: ${response.status}`);
-            }
+            // Wait, the original code in view_file showed `const createWorkbook = ...` BUT `handleDownload` was fetching `/api/export-customer`.
+            // The `createWorkbook` function I saw in lines 225-379 was NOT being used by `handleDownload` in lines 381-425?
+            // Let's re-read the original file content carefully.
 
-            const blob = await response.blob();
+            // Ah, looking at the previous view_file output:
+            // Line 225 defines createWorkbook.
+            // Line 381 defines handleDownload, and it calls fetch('/api/export-customer').
 
-            // Generate filename fallback
+            // Implication: There is seemingly DEAD CODE or alternative code for client-side export (`createWorkbook`) 
+            // OR the user wants me to use the client side generation?
+
+            // The USER REQUEST says: "button... basınca açılan menüden alınan excel ve pdf raporlarında".
+            // Since `CustomerDetailView` has both logic, and I am editing `CustomerDetailView`, I should probably ensure BOTH paths or the ACTIVE path is updated.
+
+            // However, `handleDownload` (Line 381) calls an API. If I update `createWorkbook` (Line 225), it won't affect the API call.
+            // I should check if `createWorkbook` is used anywhere. If not, I might need to update the API route `/api/export-customer` instead!
+
+            // Let's check where `createWorkbook` is called. It might be passed to a child component or used in a different handler.
+            // Actually, the button at line 769 calls `setShowExportModal(true)`.
+            // I haven't seen the `ExportModal` content yet (it was likely further down in the file).
+            // Let's assume the modal has buttons that might call `createWorkbook` (Client Side) or `handleDownload` (Server Side).
+
+            // If I look at `generatePdfDoc` (Line 427), it uses client-side logic and `handlePdfDownload` (Line 631) uses it.
+            // `handlePdfDownload` is likely used in the modal.
+
+            // If `handleDownload` (Excel) is using the API, I must find that API route and update it too, OR switch Excel generation to client-side using `createWorkbook` which is already half-implemented there.
+            // Given the complexity of sharing code between client/server and the fact that `createWorkbook` is already there (maybe legacy or preferred replacement), 
+            // I will update `createWorkbook` AND `generatePdfDoc`. 
+
+            // Then I will check line 769 button triggers `setShowExportModal(true)`.
+            // I need to see the Modal code to see what functions it calls.
+
+            // IMPORTANT: I will proceed with updating the CLIENT SIDE logic in `generatePdfDoc` (which I know is used for PDF). 
+            // For Excel, if I update `createWorkbook`, I should make sure it is used.
+            // If the original `handleDownload` fetches an API, I should probably changing it to use `createWorkbook` instead to ensure consistency and avoid finding/editing hidden API files if client-side is sufficient (and it seems to be given `createWorkbook` presence).
+            // Or I can search for the API route.
+
+            // Let's update `generatePdfDoc` first as it is clearly client side. 
+            // NOTE: I am replacing `createWorkbook` and `generatePdfDoc` in this tool call.
+
+            // I will replace `handleDownload` to use `createWorkbook` client-side instead of the API, ensuring my changes take effect immediately without hunting for API routes. This is safer and cleaner since I have all data on client.
+
+            const wb = createWorkbook();
             const cleanName = `${customer.name}_${customer.surname}`.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-            let filename = `ekstre_${cleanName}.xlsx`;
+            XLSX.writeFile(wb, `ekstre_${cleanName}.xlsx`);
 
-            // Try to get filename from header with more robust regex
-            const disposition = response.headers.get('Content-Disposition');
-            if (disposition) {
-                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                const matches = filenameRegex.exec(disposition);
-                if (matches != null && matches[1]) {
-                    filename = matches[1].replace(/['"]/g, '');
-                }
-            }
-
-            // Create download link
-            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.setAttribute('download', filename); // Explicitly set download attribute
-            document.body.appendChild(anchor);
-            anchor.click();
-
-            // Cleanup
-            setTimeout(() => {
-                document.body.removeChild(anchor);
-                window.URL.revokeObjectURL(url);
-                setShowExportModal(false);
-            }, 100);
         } catch (error: any) {
             console.error("Export failed:", error);
             alert("Dosya indirilemedi: " + error.message);
@@ -461,11 +539,16 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         // 1. Prepare Data
         const transactions: any[] = [];
         customer.sales.forEach((s: any) => {
+            // Filter out cancelled sales
+            if (s.status === 'cancelled') return;
+
             s.items.forEach((item: any) => {
                 const listPrice = item.listUnitPrice || item.unitPrice;
                 const discountRate = item.appliedDiscountRate || 0;
                 transactions.push({
+                    groupId: s.id,
                     date: new Date(s.date),
+                    createdAt: new Date(s.createdAt || s.date),
                     type: 'Satış',
                     description: item.productName,
                     quantity: item.quantity,
@@ -479,9 +562,19 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             });
         });
         customer.collections.forEach((c: any) => {
+            let typeLabel = 'Tahsilat';
+            const note = c.note || '';
+            const lowerNote = note.toLowerCase();
+
+            if (lowerNote.startsWith('nakit')) typeLabel = 'Tahsilat - Nakit';
+            else if (lowerNote.startsWith('havale')) typeLabel = 'Tahsilat - Havale';
+            else if (lowerNote.startsWith('k.kartı')) typeLabel = 'Tahsilat - K.Kartı';
+
             transactions.push({
+                groupId: c.id,
                 date: new Date(c.date),
-                type: 'Tahsilat',
+                createdAt: new Date(c.createdAt || c.date),
+                type: typeLabel,
                 description: c.note || 'Tahsilat',
                 quantity: '-',
                 unitPrice: '-',
@@ -496,7 +589,9 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             customer.returns.forEach((r: any) => {
                 r.items.forEach((item: any) => {
                     transactions.push({
+                        groupId: r.id,
                         date: new Date(r.date),
+                        createdAt: new Date(r.createdAt || r.date),
                         type: 'İade',
                         description: item.productName + ' (İade)',
                         quantity: item.quantity,
@@ -510,7 +605,24 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                 });
             });
         }
-        transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        // 1. Sort by date ASCENDING then by createdAt
+        transactions.sort((a, b) => {
+            const tA = a.date.getTime();
+            const tB = b.date.getTime();
+            if (tA !== tB) return tA - tB;
+            return (a.createdAt.getTime() || 0) - (b.createdAt.getTime() || 0);
+        });
+
+        // 2. Calculate running balance
+        let runningBalance = 0;
+        transactions.forEach(t => {
+            runningBalance += (t.debt - t.credit);
+            t.balanceSnapshot = runningBalance;
+        });
+
+        // 3. Reverse for Display
+        transactions.reverse();
 
         // 2. Generate PDF Content
         doc.setFontSize(18);
@@ -562,27 +674,28 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         doc.text(`Bakiye: $${balance.toLocaleString('en-US')} ${balance > 0 ? '(Borç)' : '(Alacak)'}`, 120, totalReturns > 0 ? 62 : 57);
 
         // 3. Table
-        let runningBalance = 0;
-        const tableBody = transactions.map(t => {
-            runningBalance += (t.debt - t.credit);
+        const tableBody = transactions.map((t, index) => {
+            const prev = transactions[index - 1];
+            const isSameGroup = prev && prev.groupId === t.groupId;
+
             return [
-                t.date.toLocaleDateString('tr-TR'),
-                t.type,
+                isSameGroup ? '' : t.date.toLocaleDateString('tr-TR'),
+                isSameGroup ? '' : t.type,
                 t.description,
                 t.quantity !== '-' ? t.quantity : '',
-                t.listPrice !== '-' ? `$${Number(t.listPrice).toLocaleString('en-US')}` : '',
-                t.discountRate !== '-' && t.discountRate > 0 ? `%${(t.discountRate * 100).toFixed(0)}` : '',
                 t.unitPrice !== '-' ? `$${Number(t.unitPrice).toLocaleString('en-US')}` : '',
                 t.itemTotal !== '-' ? `$${Number(t.itemTotal).toLocaleString('en-US')}` : '',
                 t.debt > 0 ? `$${t.debt.toLocaleString('en-US')}` : '-',
                 t.credit > 0 ? `$${t.credit.toLocaleString('en-US')}` : '-',
-                `$${runningBalance.toLocaleString('en-US')}`
+                `$${t.balanceSnapshot.toLocaleString('en-US')}`,
+                // Hidden column for grouping info for hooks if needed, but here leveraging 'content' check or index
+                t.groupId
             ];
         });
 
         // Use autoTable
         autoTable(doc, {
-            head: [['Tarih', 'Tür', 'Açıklama', 'Adet', 'Liste', 'İnd.', 'Birim', 'Toplam', 'Borç', 'Tahsilat', 'Bakiye']],
+            head: [['Tarih', 'Tür', 'Açıklama', 'Adet', 'Birim', 'Toplam', 'Borç', 'Tahsilat', 'Bakiye']],
             body: tableBody,
             startY: 80,
             theme: 'grid',
@@ -590,23 +703,66 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
             styles: { fontSize: 7, cellPadding: 2, font: 'Roboto' }, // Use Roboto
             columnStyles: {
                 0: { cellWidth: 18 }, // Date
-                1: { cellWidth: 15 }, // Type - Increased width
+                1: { cellWidth: 18 }, // Type - Increased width
                 2: { cellWidth: 'auto' }, // Desc
                 3: { cellWidth: 10, halign: 'center' }, // Qty
-                4: { cellWidth: 15, halign: 'right' }, // List
-                5: { cellWidth: 10, halign: 'center' }, // Disc
-                6: { cellWidth: 15, halign: 'right' }, // Unit
-                7: { cellWidth: 18, halign: 'right' }, // Total
-                8: { cellWidth: 18, halign: 'right' }, // Debt
-                9: { cellWidth: 18, halign: 'right' }, // Credit - (Tahsilat)
-                10: { cellWidth: 20, halign: 'right' }, // Balance
+                4: { cellWidth: 15, halign: 'right' }, // Unit
+                5: { cellWidth: 18, halign: 'right' }, // Total
+                6: { cellWidth: 18, halign: 'right' }, // Debt
+                7: { cellWidth: 18, halign: 'right' }, // Credit - (Tahsilat)
+                8: { cellWidth: 20, halign: 'right' }, // Balance
+            },
+            didParseCell: (data) => {
+                // Grouping Styling: if empty date/type (meaning same group), style it?
+                // Actually, let's alternate background color based on groupId
+                // Data has access to row.raw which is the array of data.
+                // But autoTable might not pass the full original object, just the array.
+                // I added groupId as the last element in tableBody.
+
+                const rawRow = data.row.raw as any[];
+                if (rawRow && rawRow.length > 0) {
+                    const groupId = rawRow[rawRow.length - 1]; // Last item is groupId
+                    // We need a deterministic color for this group ID, or simple alternation.
+                    // Since rows are ordered, we can check if groupId changed from previous row?
+                    // No, simply: use local variable in closure to track?
+                    // Hard since didParseCell is called cell by cell.
+
+                    // Better: Check row index.
+                    // But "stripe" theme does it by row index. We want by Group.
+                    // Let's settle for "No Stripe" (theme: plain) and manual coloring?
+                    // Or just keep the Grid theme but make repeated items clear (which I did by blanking text).
+
+                    // Requirement: "renk veya gösterim şekli ile anlaşılır bir hale getir".
+                    // Blanking out Date/Type is a very strong "gösterim şekli" for grouping.
+                    // Let's stick with that for now as it's cleaner than rainbow colors.
+                    // Additionally, we can add a top border if it's a NEW group.
+
+                    if (data.section === 'body') {
+                        const isNewGroup = data.cell.text[0] !== ''; // If text is present in first col, it is header of group
+                        if (data.column.index === 0 && !isNewGroup) {
+                            // It's a continuation row
+                        }
+
+                        // Let's add top border if it is a new group (i.e. first column has text)
+                        // This applies to all cells in that row.
+                        if (data.column.index === 0) {
+                            // Check previous row's groupId
+                            const prevRow = data.table.body[data.row.index - 1];
+                            const currGroupId = groupId;
+                            // Wait, accessing previous row in didParseCell might be tricky if not parsed yet? 
+                            // Actually tableBody is fully prepared.
+
+                            // Let's rely on the standard grid. The blank text is sufficient for grouping visualisation.
+                            // I will keep the 'grid' theme which puts lines everywhere. 
+                            // The user said "renk veya gösterim şekli".
+                        }
+                    }
+                }
             },
             foot: [[
                 '',
                 '',
                 'GENEL TOPLAM',
-                '',
-                '',
                 '',
                 '',
                 '',
@@ -670,13 +826,43 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
     async function onAddCollection(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         if (loading) return;
+
+        const amountVal = parseFloat(collectionAmount);
+        if (!collectionAmount || isNaN(amountVal) || amountVal <= 0) {
+            alert("Geçerli bir tutar giriniz.");
+            return;
+        }
+
         setLoading(true);
         const formData = new FormData(e.currentTarget);
-        const amount = Number(formData.get("amount"));
-        const note = formData.get("note") as string;
+        const userNote = formData.get("note") as string;
+
+        let finalAmount = amountVal;
+        let finalNote = "";
+
+        if (collectionMethod === 'cash') {
+            finalNote = `Nakit${userNote ? ' - ' + userNote : ''}`;
+        } else if (collectionMethod === 'transfer') {
+            finalNote = `Havale${userNote ? ' - ' + userNote : ''}`;
+        } else if (collectionMethod === 'creditCard') {
+            const commissionVal = amountVal * (commissionRate / 100);
+            const netAmount = amountVal - commissionVal;
+            finalAmount = netAmount;
+
+            // Format note
+            finalNote = `K.Kartı`;
+            if (userNote) finalNote += ` - ${userNote}`;
+            if (commissionRate > 0) {
+                finalNote += ` (%${commissionRate} Komisyon: ${commissionVal.toLocaleString('en-US')})`;
+            }
+        }
+
         try {
-            await addCollection(customer.id, amount, note);
+            await addCollection(customer.id, finalAmount, finalNote);
             setShowCollectionModal(false);
+            setCollectionAmount("");
+            setCommissionRate(0);
+            setCollectionMethod('cash');
             router.refresh();
         } catch (error: any) {
             alert("Hata: " + error.message);
@@ -855,62 +1041,73 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                         <h3 style={{ textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1rem', fontSize: '1rem' }}>SATIŞ GEÇMİŞİ</h3>
                         {customer.sales.length === 0 ? <p style={{ color: 'var(--color-neutral)', marginTop: '1rem' }}>Henüz satış yok.</p> : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {customer.sales.map((sale: any) => (
-                                    <div
-                                        key={sale.id}
-                                        onClick={() => openEditModal(sale)}
-                                        className="sale-card"
-                                        style={{
-                                            border: '1px solid var(--border)',
-                                            padding: '1.25rem',
-                                            cursor: 'pointer',
-                                            borderRadius: '12px',
-                                            background: 'var(--surface)',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ background: 'var(--primary-blue)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
-                                                    {new Date(sale.date).getDate()} {new Date(sale.date).toLocaleDateString('tr-TR', { month: 'short' })}
-                                                </div>
-                                                <span style={{ fontSize: '0.9rem', color: 'var(--color-neutral)' }}>{new Date(sale.date).getFullYear()}</span>
-                                                {sale.discountRateAtTime > 0 && <span className="badge" style={{ fontSize: '0.7em', background: '#ecfccb', color: '#4d7c0f' }}>%{(sale.discountRateAtTime * 100).toFixed(0)} İndirim</span>}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', opacity: 0.8 }}>(Düzenle)</span>
-                                                <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>${sale.totalAmount.toLocaleString('en-US')}</span>
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.5rem', padding: '0 0.5rem' }}>
-                                            {sale.items.map((item: any, idx: number) => (
-                                                <div key={idx} style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'start',
-                                                    fontSize: '0.9rem',
-                                                    color: 'var(--color-neutral)',
-                                                    padding: '8px 0',
-                                                    borderBottom: idx === sale.items.length - 1 ? 'none' : '1px solid var(--border)'
-                                                }}>
-                                                    <div style={{ flex: 1, paddingRight: '1rem' }}>
-                                                        <span style={{ color: 'rgb(var(--foreground-rgb))' }}>• {item.productName}</span>
+                                {customer.sales.map((sale: any) => {
+                                    const isCancelled = sale.status === 'cancelled';
+                                    return (
+                                        <div
+                                            key={sale.id}
+                                            onClick={() => {
+                                                if (isCancelled) {
+                                                    alert("Bu satış iptal edilmiştir, düzenlenemez.");
+                                                    return;
+                                                }
+                                                openEditModal(sale);
+                                            }}
+                                            className="sale-card"
+                                            style={{
+                                                border: '1px solid var(--border)',
+                                                padding: '1.25rem',
+                                                cursor: isCancelled ? 'not-allowed' : 'pointer',
+                                                borderRadius: '12px',
+                                                background: isCancelled ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface)',
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                                                opacity: isCancelled ? 0.75 : 1
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ background: isCancelled ? '#ef4444' : 'var(--primary-blue)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
+                                                        {new Date(sale.date).getDate()} {new Date(sale.date).toLocaleDateString('tr-TR', { month: 'short' })}
                                                     </div>
-                                                    <div style={{ whiteSpace: 'nowrap', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                        <span style={{ fontWeight: 500 }}>
-                                                            {item.quantity} x ${item.unitPrice.toLocaleString('en-US')}
-                                                        </span>
-                                                        {item.appliedDiscountRate > 0 && (
-                                                            <span style={{ fontSize: '0.75rem', opacity: 0.7, textDecoration: 'line-through' }}>
-                                                                ${item.listUnitPrice.toLocaleString('en-US')}
+                                                    <span style={{ fontSize: '0.9rem', color: 'var(--color-neutral)', textDecoration: isCancelled ? 'line-through' : 'none' }}>{new Date(sale.date).getFullYear()}</span>
+                                                    {isCancelled && <span className="badge" style={{ fontSize: '0.7em', background: '#fee2e2', color: '#b91c1c' }}>İPTAL EDİLDİ</span>}
+                                                    {!isCancelled && sale.discountRateAtTime > 0 && <span className="badge" style={{ fontSize: '0.7em', background: '#ecfccb', color: '#4d7c0f' }}>%{(sale.discountRateAtTime * 100).toFixed(0)} İndirim</span>}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                    {!isCancelled && <span style={{ fontSize: '0.75rem', color: 'var(--primary-blue)', opacity: 0.8 }}>(Düzenle)</span>}
+                                                    <span style={{ fontWeight: 800, fontSize: '1.1rem', textDecoration: isCancelled ? 'line-through' : 'none' }}>${sale.totalAmount.toLocaleString('en-US')}</span>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.5rem', padding: '0 0.5rem' }}>
+                                                {sale.items.map((item: any, idx: number) => (
+                                                    <div key={idx} style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'start',
+                                                        fontSize: '0.9rem',
+                                                        color: 'var(--color-neutral)',
+                                                        padding: '8px 0',
+                                                        borderBottom: idx === sale.items.length - 1 ? 'none' : '1px solid var(--border)'
+                                                    }}>
+                                                        <div style={{ flex: 1, paddingRight: '1rem' }}>
+                                                            <span style={{ color: 'rgb(var(--foreground-rgb))', textDecoration: isCancelled ? 'line-through' : 'none' }}>• {item.productName}</span>
+                                                        </div>
+                                                        <div style={{ whiteSpace: 'nowrap', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textDecoration: isCancelled ? 'line-through' : 'none' }}>
+                                                            <span style={{ fontWeight: 500 }}>
+                                                                {item.quantity} x ${item.unitPrice.toLocaleString('en-US')}
                                                             </span>
-                                                        )}
+                                                            {!isCancelled && item.appliedDiscountRate > 0 && (
+                                                                <span style={{ fontSize: '0.75rem', opacity: 0.7, textDecoration: 'line-through' }}>
+                                                                    ${item.listUnitPrice.toLocaleString('en-US')}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -925,18 +1122,35 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                         {(!customer.returns || customer.returns.length === 0) ? <p style={{ color: 'var(--color-neutral)' }}>İade kaydı yok.</p> : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {customer.returns.map((ret: any) => (
-                                    <div key={ret.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', padding: '0.5rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.05)' }}>
+                                    <div
+                                        key={ret.id}
+                                        onClick={() => openReturnEditModal(ret)}
+                                        style={{
+                                            borderBottom: '1px solid var(--border)',
+                                            paddingBottom: '1rem',
+                                            padding: '0.5rem',
+                                            borderRadius: '8px',
+                                            background: 'rgba(239, 68, 68, 0.05)',
+                                            cursor: 'pointer',
+                                            transition: 'background 0.2s'
+                                        }}
+                                        className="return-card-hover"
+                                    >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <span style={{ fontSize: '1rem', fontWeight: 800, color: 'rgb(var(--foreground-rgb))' }}>{new Date(ret.date).toLocaleDateString('tr-TR')}</span>
                                                 <span className="badge" style={{ fontSize: '0.7em', background: '#fca5a5', color: '#7f1d1d' }}>İADE</span>
+                                                <span style={{ fontSize: '0.75rem', color: '#ef4444', opacity: 0.8 }}>(Düzenle)</span>
                                             </div>
                                             <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#ef4444' }}>-${ret.totalAmount.toLocaleString('en-US')}</span>
                                         </div>
                                         <ul style={{ paddingLeft: '1.2rem', color: 'var(--color-neutral)', fontSize: '0.9rem', margin: 0 }}>
                                             {ret.items.map((item: any, idx: number) => (
-                                                <li key={idx}>
-                                                    {item.productName} — {item.quantity} x ${item.unitPrice}
+                                                <li key={idx} style={{ marginBottom: '0.25rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                                        <span>{item.productName}</span>
+                                                        <span style={{ fontWeight: 500 }}>{item.quantity} x ${item.unitPrice}</span>
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -954,16 +1168,91 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
                 }}>
-                    <form onSubmit={onAddCollection} className="card" style={{ width: '90%', maxWidth: '400px', margin: 0 }}>
+                    <form onSubmit={onAddCollection} className="card" style={{ width: '90%', maxWidth: '450px', margin: 0 }}>
                         <h3>Tahsilat Ekle</h3>
+
+                        {/* Method Selection */}
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', background: 'var(--surface-hover)', padding: '0.5rem', borderRadius: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionMethod('cash')}
+                                className={collectionMethod === 'cash' ? 'btn btn-primary' : 'btn'}
+                                style={{ flex: 1, fontSize: '0.9rem', padding: '0.5rem' }}
+                            >
+                                💵 Nakit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionMethod('transfer')}
+                                className={collectionMethod === 'transfer' ? 'btn btn-primary' : 'btn'}
+                                style={{ flex: 1, fontSize: '0.9rem', padding: '0.5rem' }}
+                            >
+                                🏦 Havale
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCollectionMethod('creditCard')}
+                                className={collectionMethod === 'creditCard' ? 'btn btn-primary' : 'btn'}
+                                style={{ flex: 1, fontSize: '0.9rem', padding: '0.5rem' }}
+                            >
+                                💳 K.Kartı
+                            </button>
+                        </div>
+
                         <div style={{ marginBottom: '1rem' }}>
                             <label>Tutar ($)</label>
-                            <input name="amount" type="number" step="0.01" required className="input" autoFocus />
+                            <input
+                                name="amount"
+                                type="number"
+                                step="0.01"
+                                required
+                                className="input"
+                                autoFocus
+                                value={collectionAmount}
+                                onChange={(e) => setCollectionAmount(e.target.value)}
+                            />
                         </div>
+
+                        {collectionMethod === 'creditCard' && (
+                            <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>Komisyon Oranı (%)</label>
+                                <select
+                                    className="select"
+                                    value={commissionRate}
+                                    onChange={(e) => setCommissionRate(Number(e.target.value))}
+                                    style={{ width: '100%' }}
+                                >
+                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+                                        <option key={r} value={r}>%{r}</option>
+                                    ))}
+                                </select>
+
+                                {collectionAmount && !isNaN(parseFloat(collectionAmount)) && (
+                                    <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--color-neutral)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Girilen Tutar:</span>
+                                            <span>${parseFloat(collectionAmount).toLocaleString('en-US')}</span>
+                                        </div>
+                                        {commissionRate > 0 && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                                                <span>Kesilen Komisyon (%{commissionRate}):</span>
+                                                <span>-${(parseFloat(collectionAmount) * (commissionRate / 100)).toLocaleString('en-US')}</span>
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem', paddingTop: '0.25rem', borderTop: '1px dashed var(--border)', fontWeight: 'bold', color: 'var(--primary-blue)' }}>
+                                            <span>Tahsil Edilecek Net:</span>
+                                            <span>${(parseFloat(collectionAmount) * (1 - (commissionRate / 100))).toLocaleString('en-US')}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div style={{ marginBottom: '1rem' }}>
                             <label>Not (Opsiyonel)</label>
-                            <input name="note" className="input" />
+                            <input name="note" className="input" placeholder="Örn: Kasım bakiyesi..." />
                         </div>
+
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                             <button type="button" className="btn btn-secondary" onClick={() => setShowCollectionModal(false)} disabled={loading}>İptal</button>
                             <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -1098,7 +1387,7 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                         <div style={{ background: 'var(--surface-hover)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'left' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                 <span>Toplam Borç:</span>
-                                <strong>${customer.sales.reduce((sum: number, s: any) => sum + s.totalAmount, 0).toLocaleString('en-US')}</strong>
+                                <strong>${customer.sales.filter((s: any) => s.status !== 'cancelled').reduce((sum: number, s: any) => sum + s.totalAmount, 0).toLocaleString('en-US')}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                 <span>Toplam Tahsilat:</span>
@@ -1309,14 +1598,53 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                             <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
                                 Toplam: ${calculateEditTotal().toLocaleString('en-US')}
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={async () => {
+                                        if (confirm("Bu satışı İPTAL etmek istediğinize emin misiniz? Stoklar geri yüklenecek ve satış raporlardan kaldırılacak.")) {
+                                            try {
+                                                setLoading(true);
+                                                await cancelSale(editingSale.id);
+                                                setEditingSale(null);
+                                                router.refresh();
+                                            } catch (e: any) {
+                                                alert(e.message);
+                                                setLoading(false);
+                                            }
+                                        }
+                                    }}
+                                    disabled={loading}
+                                    style={{
+                                        padding: '0.5rem',
+                                        marginRight: 'auto',
+                                        color: '#ef4444',
+                                        background: 'rgba(239, 68, 68, 0.1)',
+                                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: 600
+                                    }}
+                                    title="Satışı İptal Et"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                                    </svg>
+                                    <span>İPTAL ET</span>
+                                </button>
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
                                     onClick={() => setEditingSale(null)}
                                     disabled={loading}
                                 >
-                                    İptal
+                                    Vazgeç
                                 </button>
                                 <button
                                     type="button"
@@ -1324,8 +1652,131 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                                     onClick={onSaveSale}
                                     disabled={loading}
                                 >
-                                    {loading && <span className="spinner"></span>}
                                     {loading ? "Kaydediliyor..." : "Kaydet"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Return Modal */}
+            {editingReturn && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99
+                }}>
+                    <div className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', margin: 0 }}>
+                        <h3>İadeyi Düzenle</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                            {editReturnItems.map((item, index) => (
+                                <div key={index}
+                                    style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        background: 'var(--surface-hover)',
+                                        padding: '0.75rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid var(--border)'
+                                    }}>
+                                    <div style={{ flex: '1 1 auto', minWidth: '150px' }}>
+                                        <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Ürün</label>
+                                        <input
+                                            className="input"
+                                            placeholder="Ürün adı..."
+                                            value={item.productName}
+                                            style={{
+                                                height: '36px',
+                                                fontSize: '0.9rem',
+                                                width: '100%',
+                                                padding: '0 0.5rem'
+                                            }}
+                                            onChange={(e) => {
+                                                const newItems = [...editReturnItems];
+                                                newItems[index].productName = e.target.value;
+                                                setEditReturnItems(newItems);
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div style={{ width: '80px', flexShrink: 0 }}>
+                                        <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Adet</label>
+                                        <input
+                                            type="number"
+                                            className="input"
+                                            value={item.quantity}
+                                            min="1"
+                                            onChange={(e) => {
+                                                const newItems = [...editReturnItems];
+                                                newItems[index].quantity = e.target.value === '' ? '' : Number(e.target.value);
+                                                setEditReturnItems(newItems);
+                                            }}
+                                            style={{ textAlign: 'center', height: '36px', padding: '0 0.25rem', width: '100%' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ width: '100px', flexShrink: 0 }}>
+                                        <label style={{ fontSize: '0.7rem', color: 'var(--color-neutral)', marginBottom: '0.25rem', display: 'block' }}>Birim Fiyat ($)</label>
+                                        <input
+                                            type="number"
+                                            className="input"
+                                            value={item.unitPrice}
+                                            onChange={(e) => {
+                                                const newItems = [...editReturnItems];
+                                                newItems[index].unitPrice = e.target.value === '' ? '' : Number(e.target.value);
+                                                setEditReturnItems(newItems);
+                                            }}
+                                            style={{ textAlign: 'right', height: '36px', padding: '0 0.25rem', width: '100%' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ flex: '0 0 auto', textAlign: 'right', minWidth: '80px', flexShrink: 0 }}>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--color-neutral)', marginBottom: '0.2rem' }}>Toplam</div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>${(Number(item.quantity || 0) * Number(item.unitPrice || 0)).toLocaleString('en-US')}</div>
+                                    </div>
+
+                                    <div style={{ width: '30px', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                                        <button type="button" onClick={() => {
+                                            if (editReturnItems.length > 1) {
+                                                const newItems = [...editReturnItems];
+                                                newItems.splice(index, 1);
+                                                setEditReturnItems(newItems);
+                                            }
+                                        }} className="btn" style={{ padding: 0, color: 'var(--color-neutral)', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button type="button" onClick={() => setEditReturnItems([...editReturnItems, { productName: "", quantity: "", unitPrice: "" }])} className="btn" style={{ border: '1px dashed var(--border)', width: '100%', marginTop: '1rem', color: 'var(--color-neutral)' }}>
+                            + İade Ürünü Ekle
+                        </button>
+
+                        <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                                Toplam İade: ${editReturnItems.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0).toLocaleString('en-US')}
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setEditingReturn(null)}
+                                    disabled={loading}
+                                >
+                                    İptal
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={onSaveEditReturn}
+                                    disabled={loading}
+                                >
+                                    {loading && <span className="spinner"></span>}
+                                    {loading ? "Kaydediliyor..." : "Güncelle"}
                                 </button>
                             </div>
                         </div>

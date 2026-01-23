@@ -433,6 +433,11 @@ export async function updateSale(saleId: string, data: { items: any[] }) {
     const sale = await prisma.sale.findFirst({ where: { id: saleId, companyId: user.companyId } });
     if (!sale) throw new Error("Sale not found or access denied");
 
+    // Prevent updating cancelled sales
+    if (sale.status === 'cancelled') {
+        throw new Error("İptal edilmiş satış güncellenemez.");
+    }
+
     // Calculate new total
     const totalAmount = data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
 
@@ -533,6 +538,41 @@ export async function updateSale(saleId: string, data: { items: any[] }) {
         });
 
     }, { timeout: 10000 });
+
+    revalidatePath("/sales");
+    revalidatePath("/customers");
+}
+
+export async function cancelSale(saleId: string) {
+    const user = await getSessionUser();
+
+    const sale = await prisma.sale.findFirst({
+        where: { id: saleId, companyId: user.companyId },
+        include: { items: true }
+    });
+
+    if (!sale) throw new Error("Sale not found or access denied");
+    // @ts-ignore
+    if (sale.status === 'cancelled') throw new Error("Sale is already cancelled");
+
+    await prisma.$transaction(async (tx) => {
+        // 1. Revert Stock: Increment stock for each item
+        for (const item of sale.items) {
+            if (item.productId) {
+                await tx.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } }
+                });
+            }
+        }
+
+        // 2. Update Status to CANCELLED
+        await tx.sale.update({
+            where: { id: saleId },
+            // @ts-ignore
+            data: { status: 'cancelled' }
+        });
+    });
 
     revalidatePath("/sales");
     revalidatePath("/customers");

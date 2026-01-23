@@ -52,14 +52,16 @@ export default function BalanceSection({ data, month }: BalanceProps) {
                                 <td className="px-4 py-3 text-right text-neutral-500">
                                     {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD' }).format(item.riskLimit)}
                                 </td>
-                                <td className={`px-4 py-3 text-right font-bold ${item.balance > 0 ? 'text-green-500' : item.balance < 0 ? 'text-red-500' : 'text-neutral-500'}`}>
+                                <td className={`px-4 py-3 text-right font-bold ${item.balance > 0 ? 'text-red-500' : item.balance < 0 ? 'text-green-500' : 'text-neutral-500'}`}>
                                     {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'USD' }).format(item.balance)}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                    {item.riskLimit > 0 && Math.abs(item.balance) > item.riskLimit && item.balance < 0 ? (
+                                    {item.riskLimit > 0 && item.balance > item.riskLimit ? (
                                         <span className="badge bg-red-500/10 text-red-500 border border-red-500/20 text-xs">Risk Aşıldı</span>
+                                    ) : item.balance < 0 ? (
+                                        <span className="badge bg-green-500/10 text-green-500 border border-green-500/20 text-xs">Alacaklı</span>
                                     ) : (
-                                        <span className="badge bg-neutral-100 text-neutral-500 border border-neutral-200 text-xs">-</span>
+                                        <span className="badge bg-neutral-100 text-neutral-500 border border-neutral-200 text-xs">Normal</span>
                                     )}
                                 </td>
                             </tr>

@@ -27,7 +27,10 @@ export async function getDashboardStats(filter: FilterType = 'all') {
     // 1. Sales
     const sales = await prisma.sale.aggregate({
         _sum: { totalAmount: true },
-        where: whereClause
+        where: {
+            ...whereClause,
+            status: { not: 'cancelled' }
+        }
     });
 
     // 2. Collection
@@ -39,7 +42,10 @@ export async function getDashboardStats(filter: FilterType = 'all') {
     // 3. Balance (All time for THIS COMPANY)
     const globalSales = await prisma.sale.aggregate({
         _sum: { totalAmount: true },
-        where: { companyId: user.companyId }
+        where: {
+            companyId: user.companyId,
+            status: { not: 'cancelled' }
+        }
     });
     const globalCollection = await prisma.collection.aggregate({
         _sum: { amount: true },
@@ -69,6 +75,7 @@ export async function getTopProducts(filter: FilterType = 'all') {
     const whereClause: any = {
         sale: {
             companyId: user.companyId,
+            status: { not: 'cancelled' },
             ...(dateFilter ? { date: { gte: dateFilter } } : {})
         }
     };
@@ -94,7 +101,7 @@ export async function getLatestSales(filter: FilterType = 'all') {
     const user = await getSessionUser();
     const dateFilter = getDateFilter(filter);
 
-    const whereClause: any = { companyId: user.companyId };
+    const whereClause: any = { companyId: user.companyId, status: { not: 'cancelled' } };
     if (dateFilter) {
         whereClause.date = { gte: dateFilter };
     }
