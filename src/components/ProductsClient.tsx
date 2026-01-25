@@ -27,7 +27,24 @@ export default function ProductsClient({ products }: { products: any[] }) {
 
     const isSimpleMode = ["Ekran", "Ekran Koruma", "Kumanda"].includes(selectedProductGroup);
 
-    // Reset states when modal closes/opens
+    // Mobile Expand State
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+    const toggleExpand = (id: string, e: React.MouseEvent) => {
+        // Check if mobile
+        if (window.innerWidth < 768) {
+            e.stopPropagation(); // Don't trigger modal
+            const newSet = new Set(expandedIds);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            setExpandedIds(newSet);
+        } else {
+            // Desktop: Allow modal to open via the row click handler
+        }
+    };
     const resetForm = () => {
         setImagePreview(null);
         setCalculatedPrice("");
@@ -159,10 +176,64 @@ export default function ProductsClient({ products }: { products: any[] }) {
         }
     };
 
+    // Export Handler
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExport = async () => {
+        try {
+            setIsExporting(true);
+            const response = await fetch('/api/products/export');
+
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            // The filename is set by the server standard, but we can fallback or use the one from header if needed. 
+            // Browser usually handles content-disposition with simple navigation, but with blob we set it manually.
+            // Let's rely on a manual name here to match requirement pattern.
+            const dateStr = new Date().toISOString().slice(0, 10);
+            a.download = `urun-listesi-${dateStr}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            alert("İndirme sırasında hata oluştu: " + error.message);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                        className="btn btn-secondary desktop-only"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        style={{ alignItems: 'center', gap: '0.5rem' }}
+                    >
+                        {isExporting ? (
+                            <>
+                                <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></span>
+                                <span>İndiriliyor...</span>
+                            </>
+                        ) : (
+                            <>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <span>Ürün Listesi</span>
+                            </>
+                        )}
+                    </button>
                     <button
                         className="btn btn-secondary"
                         onClick={() => setShowStockModal(true)}
@@ -196,7 +267,19 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-neutral)' }}>Ürün bulunamadı.</td>
                             </tr>
                         ) : products.map(p => (
-                            <tr key={p.id} onClick={() => openViewModal(p)} style={{ cursor: 'pointer' }} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <tr
+                                key={p.id}
+                                onClick={(e) => {
+                                    // If mobile, toggle expand. If Desktop, open modal.
+                                    if (window.innerWidth < 768) {
+                                        toggleExpand(p.id, e);
+                                    } else {
+                                        openViewModal(p);
+                                    }
+                                }}
+                                style={{ cursor: 'pointer' }}
+                                className={`hover:bg-gray-50 dark:hover:bg-gray-800 product-row-item ${expandedIds.has(p.id) ? 'expanded' : ''}`}
+                            >
                                 <td>
                                     {p.imageUrl ? (
                                         <img src={p.imageUrl} alt="" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
@@ -217,6 +300,26 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                         {p.stock}
                                     </span>
                                 </td>
+
+                                {/* Mobile Expanded Content (Hidden on Desktop via CSS) */}
+                                {expandedIds.has(p.id) && (
+                                    <td className="mobile-expanded-content" style={{ display: 'block', border: 'none', padding: '0 0.5rem 1rem 0.5rem', background: 'transparent' }}>
+                                        <div style={{ background: 'var(--surface-hover)', borderRadius: '12px', padding: '1rem', marginTop: '0.5rem' }}>
+                                            {p.imageUrl && (
+                                                <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                                                    <img src={p.imageUrl} alt={p.name} style={{ maxHeight: '160px', width: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.85rem' }}>
+                                                {p.ledCode && <div><strong>Led Kodu:</strong> <span style={{ color: 'var(--color-neutral)' }}>{p.ledCode}</span></div>}
+                                                {p.location && <div><strong>Konum:</strong> <span style={{ color: 'var(--color-neutral)' }}>{p.location}</span></div>}
+                                                {p.cost > 0 && <div><strong>Maliyet:</strong> <span style={{ color: 'var(--color-neutral)' }}>${p.cost}</span></div>}
+                                                <div><strong>Eklenme:</strong> <span style={{ color: 'var(--color-neutral)' }}>{new Date(p.createdAt).toLocaleDateString('tr-TR')}</span></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                )}
+
                                 <td style={{ textAlign: 'right' }}>
                                     <button
                                         onClick={(e) => openEditModal(p, e)}

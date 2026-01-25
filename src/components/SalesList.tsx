@@ -224,11 +224,11 @@ export default function SalesList({ sales }: { sales: any[] }) {
                             + Kalem Ekle
                         </button>
 
-                        <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                        <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', alignSelf: 'flex-start' }}>
                                 Toplam: ${calculateEditTotal().toLocaleString('en-US')}
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', width: '100%', justifyContent: 'space-between' }}>
                                 <button
                                     type="button"
                                     className="btn"
@@ -247,8 +247,7 @@ export default function SalesList({ sales }: { sales: any[] }) {
                                     }}
                                     disabled={loading}
                                     style={{
-                                        padding: '0.5rem',
-                                        marginRight: 'auto',
+                                        padding: '0.4rem 0.6rem',
                                         color: '#ef4444',
                                         background: 'rgba(239, 68, 68, 0.1)',
                                         border: '1px solid rgba(239, 68, 68, 0.2)',
@@ -256,34 +255,40 @@ export default function SalesList({ sales }: { sales: any[] }) {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        fontWeight: 600
+                                        gap: '0.25rem',
+                                        fontWeight: 600,
+                                        fontSize: '0.8rem'
                                     }}
                                     title="Satışı İptal Et"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <circle cx="12" cy="12" r="10"></circle>
                                         <line x1="15" y1="9" x2="9" y2="15"></line>
                                         <line x1="9" y1="9" x2="15" y2="15"></line>
                                     </svg>
-                                    <span>İPTAL ET</span>
+                                    <span>İPTAL</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setEditingSale(null)}
-                                    disabled={loading}
-                                >
-                                    Vazgeç
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={onSaveSale}
-                                    disabled={loading}
-                                >
-                                    {loading ? "Kaydediliyor..." : "Kaydet"}
-                                </button>
+
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setEditingSale(null)}
+                                        disabled={loading}
+                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                                    >
+                                        Vazgeç
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={onSaveSale}
+                                        disabled={loading}
+                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                                    >
+                                        {loading ? "..." : "Kaydet"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

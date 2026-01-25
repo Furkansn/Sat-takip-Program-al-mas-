@@ -225,8 +225,10 @@ body {
     color: rgb(var(--foreground-rgb));
 }
 
-.table tr:last-child td {
-    border-bottom: none;
+@media (min-width: 769px) {
+    .table tr:last-child td {
+        border-bottom: none;
+    }
 }
 
 .table tbody tr {
@@ -538,6 +540,10 @@ select.filter-control {
     display: none !important;
 }
 
+.mobile-customer-title {
+    display: none;
+}
+
 
 /* Table Separated (Card Rows for Desktop) */
 .table-separated {
@@ -597,8 +603,42 @@ select.filter-control {
 
 
 @media (max-width: 768px) {
-    .desktop-only {
+
+    .desktop-only,
+    .desktop-only-text {
         display: none !important;
+    }
+
+    .mobile-expanded-content {
+        display: none !important;
+    }
+
+    .mobile-customer-title {
+        /* display handled by component inline style (flex) or override here if needed, but 'block' was previous. Component has header style. */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        /* Ensure it shows as flex on mobile */
+        font-weight: 800;
+        font-size: 1.1rem;
+        line-height: 1.3;
+        margin-bottom: 0.5rem;
+        color: rgb(var(--foreground-rgb));
+        width: 100%;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+    }
+
+    /* Override flex behavior for the first cell (Customer Name) on mobile */
+    .table td:first-child[data-label="Müşteri"] {
+        display: block;
+        /* Stack content vertically */
+        text-align: left;
+    }
+
+    /* Hide the data-label pseudo-element for the Name cell only */
+    .table td:first-child[data-label="Müşteri"]::before {
+        display: none;
     }
 
     .mobile-only {
@@ -645,6 +685,16 @@ select.filter-control {
         padding: 0.75rem 1rem;
         /* REDUCED PADDING for mobile items */
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Hide Image Column on Mobile List View */
+    .table-separated td:first-child {
+        display: none;
+    }
+
+    .mobile-expanded-content {
+        display: block;
+        /* Visible on mobile when rendered */
     }
 
     .table td,

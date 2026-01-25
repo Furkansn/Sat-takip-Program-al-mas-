@@ -1,7 +1,7 @@
 import Link from "next/link";
 import React from "react";
 import { getSales, getProducts } from "@/actions/transaction";
-import { getCustomers } from "@/actions/customer";
+import { getCustomers, getActiveCustomersLite } from "@/actions/customer";
 import SalesFilter from "@/components/SalesFilter";
 import SalesList from "@/components/SalesList";
 import Pagination from "@/components/Pagination";
@@ -21,7 +21,7 @@ export default async function SalesPage({
     const page = Number(searchParams?.page) || 1;
 
     // 1. Fetch data in parallel
-    const [salesData, customers, productsData, company] = await Promise.all([
+    const [salesData, customersLite, productsData, company] = await Promise.all([
         getSales({
             customerId: searchParams?.customerId,
             productId: searchParams?.productId,
@@ -29,8 +29,8 @@ export default async function SalesPage({
             page,
             limit: 10
         }),
-        getCustomers(),
-        getProducts(),
+        getActiveCustomersLite(), // Optimized for dropdowns
+        getProducts(), // Already optimized for dropdowns when no paging params
         getCurrentCompany()
     ]);
 
@@ -73,7 +73,7 @@ export default async function SalesPage({
 
             {/* Filter Component */}
             <React.Suspense fallback={<div className="card" style={{ height: '100px' }}>Yükleniyor...</div>}>
-                <SalesFilter customers={customers.customers} products={productsData.products} />
+                <SalesFilter customers={customersLite} products={productsData.products} />
             </React.Suspense>
 
             <div style={{ padding: 0 }}>

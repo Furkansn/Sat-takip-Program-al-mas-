@@ -101,6 +101,29 @@ export async function toggleCustomerStatus(customerId: string, isActive: boolean
     revalidatePath(`/customers/${customerId}`);
 }
 
+// Light version for dropdowns - Critical Performance Optimization
+export async function getActiveCustomersLite() {
+    const user = await getSessionUser();
+
+    return prisma.customer.findMany({
+        where: {
+            companyId: user.companyId,
+            isActive: true
+        },
+        select: {
+            id: true,
+            name: true,
+            surname: true,
+            // Minimal fields
+        },
+        orderBy: [
+            { name: 'asc' },
+            { surname: 'asc' }
+        ]
+    });
+}
+
+
 export async function createCustomer(formData: FormData) {
     const user = await getSessionUser();
 

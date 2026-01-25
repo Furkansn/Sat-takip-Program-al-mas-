@@ -69,10 +69,19 @@ export default function CustomerRow({ customer }: { customer: any }) {
             className="hover:bg-white/5"
         >
             <td data-label="Müşteri">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {/* Mobile Title View */}
+                <div className="mobile-customer-title">
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '0.5rem' }}>
+                        {customer.name} {customer.surname}
+                    </span>
+                    <span style={{ flexShrink: 0 }}>{segmentBadge}</span>
+                </div>
+
+                {/* Desktop/Standard View (Hidden on mobile via CSS if needed, or just kept) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} className="desktop-customer-name">
                     {isLoading && <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></span>}
-                    <span style={{ fontWeight: 500 }}>{customer.name} {customer.surname}</span>
-                    {segmentBadge}
+                    <span style={{ fontWeight: 500 }} className="desktop-only-text">{customer.name} {customer.surname}</span>
+                    <span className="desktop-only-text">{segmentBadge}</span>
                 </div>
             </td>
             <td data-label="Telefon">{customer.phone || '-'}</td>

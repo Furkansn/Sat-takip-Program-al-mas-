@@ -109,6 +109,7 @@ model Product {
   @@index([name])
   @@index([compatibleModels])
   @@index([supplierId])
+  @@index([productGroup])
 }
 
 model Supplier {
@@ -148,6 +149,7 @@ model Sale {
   @@index([companyId])
   @@index([customerId])
   @@index([date])
+  @@index([status])
 }
 
 model SaleItem {

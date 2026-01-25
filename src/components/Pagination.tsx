@@ -1,11 +1,14 @@
+"use client";
 
 import Link from "next/link";
 import { getPaginationItems } from "@/lib/pagination";
+import { useRouter } from "next/navigation";
+import { useRef } from "react";
 
 interface PaginationProps {
     currentPage: number;
     totalPages: number;
-    searchParams?: any; // Using any for flexibility with Next.js searchParams types
+    searchParams?: any;
     baseUrl: string;
 }
 
@@ -15,20 +18,32 @@ export default function Pagination({
     searchParams = {},
     baseUrl
 }: PaginationProps) {
-    // If we only have 1 page, typically we don't show pagination, 
-    // but the logic "totalPages <= 7 ... render 1..totalPages" implies we might show it?
-    // The existing code did `{totalPages > 1 && ...}`. I will keep that logic in the parent usage 
-    // OR handle it here. If I handle it here, I should return null if <= 1.
-    // However, user said "totalPages <= 7 ise zaten hepsini göster (1..totalPages)".
-    // Usually if totalPages is 1, we don't need pagination.
+    const router = useRouter();
+    const prefetchedPages = useRef(new Set<number>());
+
     if (totalPages <= 1) return null;
 
     const items = getPaginationItems(currentPage, totalPages);
 
-    const createLink = (page: number) => ({
-        pathname: baseUrl,
-        query: { ...searchParams, page }
-    });
+    const createLinkObj = (page: number) => {
+        // Construct the URL string manually to ensure prefetch works correctly
+        const query = new URLSearchParams();
+        if (searchParams) {
+            Object.entries(searchParams).forEach(([key, value]) => {
+                if (value) query.set(key, String(value));
+            });
+        }
+        query.set('page', String(page));
+        return `${baseUrl}?${query.toString()}`;
+    };
+
+    const handlePrefetch = (page: number) => {
+        if (page > 0 && page <= totalPages && !prefetchedPages.current.has(page)) {
+            const url = createLinkObj(page);
+            router.prefetch(url);
+            prefetchedPages.current.add(page);
+        }
+    };
 
     return (
         <div style={{
@@ -42,9 +57,11 @@ export default function Pagination({
         }}>
             {/* Prev Button */}
             <Link
-                href={currentPage > 1 ? createLink(currentPage - 1) : '#'}
+                href={currentPage > 1 ? createLinkObj(currentPage - 1) : '#'}
                 aria-disabled={currentPage <= 1}
                 className={`btn btn-secondary`}
+                onMouseEnter={() => handlePrefetch(currentPage - 1)}
+                onTouchStart={() => handlePrefetch(currentPage - 1)}
                 style={{
                     padding: '0.5rem 1rem',
                     textDecoration: 'none',
@@ -76,8 +93,10 @@ export default function Pagination({
                 return (
                     <Link
                         key={item}
-                        href={createLink(item)}
+                        href={createLinkObj(item)}
                         className={`btn ${item === currentPage ? 'btn-primary' : 'btn-secondary'}`}
+                        onMouseEnter={() => handlePrefetch(item)}
+                        onTouchStart={() => handlePrefetch(item)}
                         style={{
                             padding: '0.5rem 1rem',
                             textDecoration: 'none'
@@ -90,9 +109,11 @@ export default function Pagination({
 
             {/* Next Button */}
             <Link
-                href={currentPage < totalPages ? createLink(currentPage + 1) : '#'}
+                href={currentPage < totalPages ? createLinkObj(currentPage + 1) : '#'}
                 aria-disabled={currentPage >= totalPages}
                 className={`btn btn-secondary`}
+                onMouseEnter={() => handlePrefetch(currentPage + 1)}
+                onTouchStart={() => handlePrefetch(currentPage + 1)}
                 style={{
                     padding: '0.5rem 1rem',
                     textDecoration: 'none',
