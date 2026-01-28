@@ -461,6 +461,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
                                     <option value="Kumanda">Kumanda</option>
                                     <option value="LGP">LGP</option>
                                     <option value="Led">Led</option>
+                                    <option value="TV">TV</option>
                                     <option value="Diğer">Diğer</option>
                                 </select>
                             </div>

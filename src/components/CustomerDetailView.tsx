@@ -62,6 +62,8 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
     const [showEditModal, setShowEditModal] = useState(false);
 
     const [showExportModal, setShowExportModal] = useState(false);
+    const [usdRate, setUsdRate] = useState<number | null>(null);
+    const [currencyLoading, setCurrencyLoading] = useState(true);
 
     // Edit Sale State
     const [editingSale, setEditingSale] = useState<any>(null);
@@ -121,9 +123,27 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
         }
     }
 
-    // Fetch products once
+    // Fetch products and currency once
     useEffect(() => {
         getProducts().then(data => setProductList(data.products));
+
+        // Fetch Currency
+        const fetchCurrency = async () => {
+            try {
+                const res = await fetch('/api/currency');
+                const data = await res.json();
+                if (data.USD && data.USD.Satış) {
+                    // API returns string like "34.5000" or "34,5000". Normalize it.
+                    const rateStr = data.USD.Satış.replace(',', '.');
+                    setUsdRate(parseFloat(rateStr));
+                }
+            } catch (e) {
+                console.error("Failed to fetch currency", e);
+            } finally {
+                setCurrencyLoading(false);
+            }
+        };
+        fetchCurrency();
     }, []);
 
     const openEditModal = (sale: any) => {
@@ -942,7 +962,20 @@ export default function CustomerDetailView({ customer }: { customer: any }) {
                         <div style={{ fontSize: '3rem', fontWeight: 800, lineHeight: 1, marginBottom: '0.5rem' }} className={customer.balance > 0 ? "text-debt" : (customer.balance < 0 ? "text-collection" : "")}>
                             ${Math.abs(customer.balance).toLocaleString('en-US')} <span style={{ fontSize: '1.2rem', fontWeight: 600 }}>{customer.balance > 0 ? 'Borç' : 'Alacak'}</span>
                         </div>
-                        <small style={{ color: 'var(--color-neutral)', fontSize: '1rem' }}>Güncel Bakiye</small>
+                        <small style={{ color: 'var(--color-neutral)', fontSize: '1rem' }}>Güncel Bakiye (USD)</small>
+                        {usdRate && (
+                            <div style={{ marginTop: '0.25rem' }}>
+                                <span style={{ color: 'rgb(var(--foreground-rgb))', fontSize: '1.2rem', fontWeight: 800 }}>
+                                    {(Math.abs(customer.balance) * usdRate).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                </span>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 400, marginLeft: '0.3rem', color: 'var(--color-neutral)', opacity: 0.8 }}>
+                                    {customer.balance > 0 ? 'Borç' : 'Alacak'} (TL)
+                                </span>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-neutral)', opacity: 0.8 }}>
+                                    Kur: {usdRate.toFixed(2)}
+                                </div>
+                            </div>
+                        )}
                         <div style={{ marginTop: '0.5rem', fontSize: '1.1rem', color: 'var(--color-neutral)' }}>
                             <strong style={{ opacity: 0.7, marginRight: '0.5rem' }}>Risk Limiti:</strong> ${customer.riskLimit.toLocaleString('en-US')}
                         </div>

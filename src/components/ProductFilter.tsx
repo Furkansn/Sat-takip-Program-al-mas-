@@ -47,6 +47,7 @@ export default function ProductFilter() {
         >
             <option value="">Tüm Gruplar</option>
             <option value="Ekran">Ekran</option>
+            <option value="TV">TV</option>
             <option value="Ekran Koruma">Ekran Koruma</option>
             <option value="Kumanda">Kumanda</option>
             <option value="LGP">LGP</option>

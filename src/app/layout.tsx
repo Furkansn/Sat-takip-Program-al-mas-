@@ -5,9 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "Satış Uygulaması",
+    title: "Satışını Takip Et !",
     description: "Müşteri ve Satış Takip Sistemi",
-    manifest: "/manifest.json",
+
 };
 
 export const viewport = {
